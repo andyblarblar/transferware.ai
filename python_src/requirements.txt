@@ -2,3 +2,5 @@ torch
 torchvision
 tqdm
 black[d]
+polars
+requests
