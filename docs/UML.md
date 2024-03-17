@@ -108,3 +108,74 @@ stateDiagram-v2
     query_api-->preprocessed_data: 1.7.1 Replace with updated data 
     query_api-->model: 1.7.2 reload()
 ````
+
+# Classes
+
+## Model
+
+```mermaid
+classDiagram
+    class ImageMatch {
+        + id: int
+        + confidence: float
+    }
+    
+    class Model {
+        <<interface>>
+        + query(image_tensor: Tensor) list~ImageMatch~
+        + reload()
+    }
+    
+    class Trainer {
+        <<interface>>
+        + train(dataset: DataSet) Model
+    }
+    
+    class Validator {
+        <<interface>>
+        + validate(model: Model, validation_data: DataSet) float
+    }
+    
+    class AbstractModelFactory {
+        <<interface>>
+        + get_model() Model
+        + get_trainer() Trainer
+        + get_validator() Validator
+    }
+    
+    Model *-- ImageMatch
+    AbstractModelFactory *-- Model
+    AbstractModelFactory *-- Trainer
+    AbstractModelFactory *-- Validator
+```
+An abstract factory is used to create working combinations of pipelines. The Model is either loaded from resources on
+disk, or created by the Trainer. The validator takes the model and does black box validation by checking if validation
+images (from Wayne state) are in the top 10 query results. So this validation is not for whatever the trainer does, 
+but for the system as a whole.
+
+The end application should load a specific factory based off configurations, so ideally all model information will be
+encapsulated within these three classes. This should make it trivial to then swap in something like SIFT matching 
+instead of a deep learning approach, while still allowing enough complexity for embedding approaches.
+
+## Dataset
+```mermaid
+classDiagram
+    class ApiCache {
+        + ApiCache(dir: Path)
+        + ensure_cached()
+        + as_df() pl.Dataframe
+    }
+
+    class CacheDataset {
+        __get_item__(idx: int) tuple~Tensor, Tensor~
+    }
+    
+    class Dataset
+    
+    Dataset <|-- CacheDataset
+    CacheDataset *-- ApiCache
+```
+
+The dataset is backed by a wrapper over the API cache, where the API cache is represented as a dataframe.
+This setup allows for us to easily make drastic changes in class choice, as we don't need to change a directory layout,
+just change some dataframe queries. Get item is returning image, class_id pairs.
