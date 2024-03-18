@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
+
 from torch import Tensor
 from torch.utils.data import Dataset
 from dataclasses import dataclass
@@ -7,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class ImageMatch:
     """An image matching to the query image/"""
+
     id: int
     """Id of matching image"""
     confidence: float
@@ -24,6 +27,14 @@ class Model(ABC):
     @abstractmethod
     def reload(self):
         """Reloads the model from disk."""
+        ...
+
+    @abstractmethod
+    def get_resource_files(self) -> list[Path]:
+        """
+        Returns paths to all resource files associated with this model. Can be used to send to the query api after
+        training is complete.
+        """
         ...
 
 
@@ -50,14 +61,12 @@ class Validator(ABC):
 
 class AbstractModelFactory(ABC):
     """Interface for creating families of query models."""
-    @abstractmethod
-    def get_model(self) -> Model:
-        ...
 
     @abstractmethod
-    def get_trainer(self) -> Trainer:
-        ...
+    def get_model(self) -> Model: ...
 
     @abstractmethod
-    def get_validator(self) -> Validator:
-        ...
+    def get_trainer(self) -> Trainer: ...
+
+    @abstractmethod
+    def get_validator(self) -> Validator: ...
