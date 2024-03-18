@@ -163,20 +163,35 @@ instead of a deep learning approach, while still allowing enough complexity for 
 ## Dataset
 ```mermaid
 classDiagram
+namespace torch {
+    class Dataset { 
+        <<interface>>
+        __getitem__(idx: int)*
+        __len__()*
+    }
+}
+namespace DataHandling {
     class ApiCache {
+        -directory: Path
+        -cache_file: Path
+        -assets_dir: Path
         + ApiCache(dir: Path)
-        + ensure_cached()
-        + as_df() pl.Dataframe
+        + ensure_cached() 
+        + as_df() polars.Dataframe
     }
 
     class CacheDataset {
-        __get_item__(idx: int) tuple~Tensor, Tensor~
+        -cache: ApiCache
+        + CacheDataset(dir: Path)
+        + class_labels() list~str~
+        __getitem__(idx: int) tuple~Tensor, Tensor~
+        __len__() int
     }
     
-    class Dataset
-    
+}
     Dataset <|-- CacheDataset
     CacheDataset *-- ApiCache
+
 ```
 
 The dataset is backed by a wrapper over the API cache, where the API cache is represented as a dataframe.
