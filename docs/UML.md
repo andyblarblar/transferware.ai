@@ -129,16 +129,18 @@ classDiagram
     
     class Trainer {
         <<interface>>
-        + train(dataset: DataSet) Model
+        + train(dataset: CacheDataset) Model
     }
     
     class Validator {
         <<interface>>
-        + validate(model: Model, validation_data: DataSet) float
+        + validate(model: Model, validation_data: Dataset) float
     }
     
     class AbstractModelFactory {
-        <<interface>>
+        <<abstract>>
+        - resource_dir: Path
+        + AbstractModelFactory(resource_dir: Path)
         + get_model() Model
         + get_trainer() Trainer
         + get_validator() Validator

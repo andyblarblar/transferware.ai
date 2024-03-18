@@ -5,6 +5,8 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from dataclasses import dataclass
 
+from ..data.dataset import CacheDataset
+
 
 @dataclass
 class ImageMatch:
@@ -42,7 +44,7 @@ class Trainer(ABC):
     """Interface for methods of training models."""
 
     @abstractmethod
-    def train(self, dataset: Dataset) -> Model:
+    def train(self, dataset: CacheDataset) -> Model:
         """Creates a model, training it and creating related files like caches."""
         ...
 
@@ -61,6 +63,13 @@ class Validator(ABC):
 
 class AbstractModelFactory(ABC):
     """Interface for creating families of query models."""
+
+    def __init__(self, resource_path: Path) -> None:
+        """
+        :param resource_path: Path to folder where all assets required for training are stored, and where model files
+        will be placed. Required files will change depending on the implementation used.
+        """
+        self._resource_path = resource_path
 
     @abstractmethod
     def get_model(self) -> Model: ...
