@@ -116,51 +116,55 @@ class ApiCache:
 
         return patterns
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, df: DataFrame):
         self._directory = directory
-        self._cache_file = directory.joinpath(
-            "cache.json"
-        )  # cache file (JSON for now, upgrade to parquet later)
+        self._cache_file = directory.joinpath("cache.json")
         self._assets_dir = directory.joinpath("assets")  # directory for images
-        self._df = None
+        self._df = df
 
-    def _requires_update(self) -> bool:
-        if self._cache_file.exists():
-            df = pl.read_json(self._cache_file)
+    @staticmethod
+    def _requires_update(cache_file: Path) -> bool:
+        if cache_file.exists():
+            df = pl.read_json(cache_file)
             max_id_cache = df["id"].max()
-            max_id_now = self.get_api_page(1)[0]["id"]
+            max_id_now = ApiCache.get_api_page(1)[0]["id"]
 
             return max_id_cache < max_id_now
         else:
             return True
 
-    def build_cache(self):
-        """Build the cache"""
+    @staticmethod
+    def from_cache(directory: Path) -> "ApiCache":
+        """Reads the cache in directory, ensures it is up-to-date, and then returns the wrapper object."""
+
+        _directory = directory
+        _cache_file = directory.joinpath("cache.json")
+        _assets_dir = directory.joinpath("assets")  # directory for images
 
         with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-            if self._requires_update():
+            if ApiCache._requires_update(_cache_file):
                 logging.info("Cache out of date, updating cache")
 
                 # Get patterns JSON
                 patterns = runner.run(ApiCache.get_api_pages_async())
 
-                if not self._directory.exists():
-                    os.makedirs(self._directory)
+                if not _directory.exists():
+                    os.makedirs(_directory)
 
                 # Write cache to disk
-                with open(self._cache_file, "w") as buffer:
+                with open(_cache_file, "w") as buffer:
                     buffer.write(json.dumps(patterns, indent=2))
 
-            self._df = pl.read_json(self._cache_file)
+            df = pl.read_json(_cache_file)
 
-            logging.info(f"Loaded cache with {len(self._df)} patterns")
+            logging.info(f"Loaded cache with {len(df)} patterns")
 
             # Begin collecting assets
-            if not self._assets_dir.exists():
-                os.makedirs(self._assets_dir)  # create assets directory
+            if not _assets_dir.exists():
+                os.makedirs(_assets_dir)  # create assets directory
 
             # Query for pattern ids + image URLs and tags
-            urls = self._df.select(
+            urls = df.select(
                 pl.col("id"),
                 pl.col("images").list.eval(pl.element().struct.field("url")),
                 pl.col("images")
@@ -206,7 +210,7 @@ class ApiCache:
                         pattern_id, image_urls, tags = row
 
                         # Create patterns directory if new
-                        pattern_dir = self._assets_dir.joinpath(str(pattern_id))
+                        pattern_dir = _assets_dir.joinpath(str(pattern_id))
                         if not pattern_dir.exists():
                             os.makedirs(pattern_dir)
 
@@ -222,6 +226,8 @@ class ApiCache:
 
             # Actually run the image get tasks
             runner.run(get_images())
+
+            return ApiCache(directory, df)
 
     def as_df(self) -> DataFrame:
         return self._df
