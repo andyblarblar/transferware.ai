@@ -4,4 +4,5 @@ tqdm
 black[d]
 polars
 requests
+aiohttp
 pytest
