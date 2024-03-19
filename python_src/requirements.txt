@@ -1,8 +1,14 @@
 torch
 torchvision
+
 tqdm
 black[d]
+
 polars
 requests
+
 aiohttp
+aiofile
+uvloop
+
 pytest

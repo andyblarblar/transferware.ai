@@ -1,4 +1,5 @@
 from typing import Optional, Any
+from itertools import chain
 
 import requests
 from pathlib import Path
@@ -11,6 +12,8 @@ from polars import DataFrame
 
 import asyncio
 import aiohttp
+from aiofile import async_open
+import uvloop
 
 
 class ApiCache:
@@ -61,6 +64,58 @@ class ApiCache:
                 break
         return patterns
 
+    @staticmethod
+    async def get_api_page_async(
+        page: int, session: aiohttp.ClientSession
+    ) -> Optional[list[dict[str, Any]]]:
+        """
+        Retrieve data from a single API page.
+        :param session: HTTP session to use.
+        :param page: page number to get.
+        :return: list of json patterns.
+        """
+        async with session.get(ApiCache.api_url(page)) as response:
+            if response.status != 200:
+                return None
+            return await response.json()
+
+    @staticmethod
+    async def get_api_pages_async() -> list[dict[str, Any]]:
+        """
+        Get all patterns from API.
+        :return list of json pattern objects.
+        """
+        patterns = []
+        page_num = 0
+        batch_size = 20
+        done = False
+
+        async with aiohttp.ClientSession() as session:
+            while not done:
+                # Spawn page gets in batches
+                tasks = []
+                for page in range(page_num + 1, page_num + batch_size + 1):
+                    tasks.append(
+                        asyncio.create_task(ApiCache.get_api_page_async(page, session))
+                    )
+                page_num += batch_size
+                logging.debug(f"Downloading up to {page_num}")
+
+                results = await asyncio.gather(*tasks)
+                patterns.extend(
+                    (
+                        pattern
+                        for pattern in chain.from_iterable(results)
+                        if pattern is not None
+                    )
+                )
+
+                # End if nothing is received
+                if [] in results:
+                    done = True
+
+        return patterns
+
     def __init__(self, directory: Path):
         self._directory = directory
         self._cache_file = directory.joinpath(
@@ -82,73 +137,91 @@ class ApiCache:
     def build_cache(self):
         """Build the cache"""
 
-        if self._requires_update():
-            logging.info("Cache out of date, updating cache")
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            if self._requires_update():
+                logging.info("Cache out of date, updating cache")
 
-            # Get patterns JSON
-            patterns = ApiCache.get_api_pages(10)
+                # Get patterns JSON
+                patterns = runner.run(ApiCache.get_api_pages_async())
 
-            if not self._directory.exists():
-                os.makedirs(self._directory)
+                if not self._directory.exists():
+                    os.makedirs(self._directory)
 
-            # Write cache to disk
-            with open(self._cache_file, "w") as buffer:
-                buffer.write(json.dumps(patterns, indent=2))
+                # Write cache to disk
+                with open(self._cache_file, "w") as buffer:
+                    buffer.write(json.dumps(patterns, indent=2))
 
-        self._df = pl.read_json(self._cache_file)
+            self._df = pl.read_json(self._cache_file)
 
-        logging.info(f"Loaded cache with {len(self._df)} patterns")
+            logging.info(f"Loaded cache with {len(self._df)} patterns")
 
-        # Begin collecting assets
-        if not self._assets_dir.exists():
-            os.makedirs(self._assets_dir)  # create assets directory
+            # Begin collecting assets
+            if not self._assets_dir.exists():
+                os.makedirs(self._assets_dir)  # create assets directory
 
-        # Query for pattern ids + image URLs and tags
-        urls = self._df.select(
-            pl.col("id"),
-            pl.col("images").list.eval(pl.element().struct.field("url")),
-            pl.col("images").list.eval(pl.element().struct.field("tags")).alias("tags"),
-        )
+            # Query for pattern ids + image URLs and tags
+            urls = self._df.select(
+                pl.col("id"),
+                pl.col("images").list.eval(pl.element().struct.field("url")),
+                pl.col("images")
+                .list.eval(pl.element().struct.field("tags"))
+                .alias("tags"),
+            ).drop_nulls()
 
-        # We use asyncio for downloading to avoid it taking like years
-        async def get_images_for_pattern(
-            pattern_id, image_urls, tags, pattern_dir, session
-        ):
-            """Download images for a pattern and write them to disk."""
-            # Download all images for pattern
-            for image_url, tag in zip(image_urls, tags):
-                logging.debug(f"Downloading {image_url}")
+            # We use asyncio for downloading to avoid it taking like years
+            async def get_images_for_pattern(
+                pattern_id, image_urls, tags, pattern_dir, session
+            ):
+                """Download images for a pattern and write them to disk."""
+                logging.debug(f"Downloading images for {pattern_id}")
+                # Download all images for pattern
+                for image_url, tag in zip(image_urls, tags):
+                    # Make path safe
+                    tag = tag.replace("/", "_")
 
-                if not pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg").exists():
-                    async with session.get(image_url) as image_response:
-                        image_file = pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg")
-                        with open(image_file, "wb") as f:
-                            f.write(await image_response.content.read())
+                    if not pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg").exists():
+                        complete = False
+                        while not complete:
+                            try:
+                                async with session.get(image_url) as image_response:
+                                    image_file = pattern_dir.joinpath(
+                                        f"{pattern_id}-{tag}.jpg"
+                                    )
+                                    async with async_open(image_file, "wb") as f:
+                                        await f.write(
+                                            await image_response.content.read()
+                                        )
+                                complete = True
+                            except aiohttp.ServerDisconnectedError as e:
+                                logging.debug("Server disconnect! Reattempting")
 
-        async def get_images():
-            # Share a single connection pool
-            async with aiohttp.ClientSession() as session:
-                tasks = []
-                # Create download image tasks, lazy
-                for row in urls.iter_rows():
-                    pattern_id, image_urls, tags = row
+            async def get_images():
+                # Share a single connection pool
+                async with aiohttp.ClientSession(
+                    connector=aiohttp.TCPConnector(limit=200)
+                ) as session:
+                    tasks = []
+                    # Create download image tasks, lazy
+                    for row in urls.iter_rows():
+                        pattern_id, image_urls, tags = row
 
-                    # Create patterns directory if new
-                    pattern_dir = self._assets_dir.joinpath(str(pattern_id))
-                    if not pattern_dir.exists():
-                        os.makedirs(pattern_dir)
+                        # Create patterns directory if new
+                        pattern_dir = self._assets_dir.joinpath(str(pattern_id))
+                        if not pattern_dir.exists():
+                            os.makedirs(pattern_dir)
 
-                    tasks.append(
-                        asyncio.create_task(
-                            get_images_for_pattern(
-                                pattern_id, image_urls, tags, pattern_dir, session
+                        tasks.append(
+                            asyncio.create_task(
+                                get_images_for_pattern(
+                                    pattern_id, image_urls, tags, pattern_dir, session
+                                )
                             )
                         )
-                    )
-                # Download each pattern in parallel, and each image per pattern in series
-                await asyncio.gather(*tasks)
+                    # Download each pattern in parallel, and each image per pattern in series
+                    await asyncio.gather(*tasks)
 
-        asyncio.run(get_images())
+            # Actually run the image get tasks
+            runner.run(get_images())
 
     def as_df(self) -> DataFrame:
         return self._df
