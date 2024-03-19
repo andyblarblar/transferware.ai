@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 import requests
 from pathlib import Path
@@ -6,6 +6,8 @@ import polars as pl
 import json
 import os
 import logging
+
+from polars import DataFrame
 
 
 class ApiCache:
@@ -21,16 +23,24 @@ class ApiCache:
         )
 
     @staticmethod
-    def get_api_page(page: int) -> Optional[list]:
-        """Retrieve data from API. Returns JSON for some patterns. Empty list if out of range."""
+    def get_api_page(page: int) -> Optional[list[dict[str, Any]]]:
+        """
+        Retrieve data from a single API page.
+        :param page: page number to get.
+        :return: list of json patterns.
+        """
         response = requests.get(ApiCache.api_url(page))
         if response.status_code != 200:
             return None
         return response.json()
 
     @staticmethod
-    def get_api_pages() -> list:
-        """Get all patterns from API"""
+    def get_api_pages(limit: None | int = None) -> list[dict[str, Any]]:
+        """
+        Get all patterns from API.
+        :param limit: Limit the number of pages to retrieve.
+        :return list of json pattern objects.
+        """
         patterns = []
         page_num = 1
         # Ends once get_api_page returns [] or error getting page
@@ -43,6 +53,9 @@ class ApiCache:
 
             patterns.extend(page)
             page_num += 1
+
+            if limit and page_num > limit:
+                break
         return patterns
 
     def __init__(self, directory: Path):
@@ -51,34 +64,50 @@ class ApiCache:
             "cache.json"
         )  # cache file (JSON for now, upgrade to parquet later)
         self._assets_dir = directory.joinpath("assets")  # directory for images
+        self._df = None
+
+    def _requires_update(self) -> bool:
+        if self._cache_file.exists():
+            df = pl.read_json(self._cache_file)
+            max_id_cache = df["id"].max()
+            max_id_now = self.get_api_page(1)[0]["id"]
+
+            return max_id_cache < max_id_now
+        else:
+            return False
 
     def build_cache(self):
         """Build the cache"""
 
-        # TODO first find if cache needs to be updated
+        if self._requires_update():
+            logging.info("Cache out of date, updating cache")
 
-        patterns = ApiCache.get_api_pages()
-        # Convert to file-like object and then to polars dataframe:
-        # For now, use JSON to easily monitor cache; upgrade to parquet later
-        # using StringIO to avoid extra file I/O
-        buffer = open(self._cache_file, "w")
-        buffer.write(json.dumps(patterns, indent=2))
-        df = pl.DataFrame(buffer)  # TODO just read from cache file?
+            # Get patterns JSON
+            patterns = ApiCache.get_api_pages(10)
 
-        # Write dataframe to parquet file (for now, use JSON for readability)
-        # df.write_parquet(self._cache_file)
+            if not self._directory.exists():
+                os.makedirs(self._directory)
+
+            # Write cache to disk
+            with open(self._cache_file, "w") as buffer:
+                buffer.write(json.dumps(patterns, indent=2))
+
+        self._df = pl.read_json(self._cache_file)
+
+        logging.info(f"Loaded cache with {len(self._df)} patterns")
 
         # Begin collecting assets
         if not self._assets_dir.exists():
             os.makedirs(self._assets_dir)  # create assets directory
 
         # Query for pattern ids + image URLs and tags
-        urls = df.select(
+        urls = self._df.select(
             pl.col("id"),
             pl.col("images").list.eval(pl.element().struct.field("url")),
-            pl.col("images").list.eval(pl.element().struct.field("tags")),
-        )  # TODO null tags?
+            pl.col("images").list.eval(pl.element().struct.field("tags")).alias("tags"),
+        )
 
+        # Download images
         for row in urls.iter_rows():
             pattern_id, image_urls, tags = row
 
@@ -90,7 +119,12 @@ class ApiCache:
             # Download all images for pattern
             for image_url, tag in zip(image_urls, tags):
                 logging.debug(f"Downloading {image_url}")
-                image_response = requests.get(image_url)
-                image_file = pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg")
-                with open(image_file, "wb") as f:
-                    f.write(image_response.content)
+
+                if not pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg").exists():
+                    image_response = requests.get(image_url)
+                    image_file = pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg")
+                    with open(image_file, "wb") as f:
+                        f.write(image_response.content)
+
+    def as_df(self) -> DataFrame:
+        return self._df
