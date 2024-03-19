@@ -197,3 +197,9 @@ namespace DataHandling {
 The dataset is backed by a wrapper over the API cache, where the API cache is represented as a dataframe.
 This setup allows for us to easily make drastic changes in class choice, as we don't need to change a directory layout,
 just change some dataframe queries. Get item is returning image, class_id pairs.
+
+## Training 
+
+```mermaid
+
+```

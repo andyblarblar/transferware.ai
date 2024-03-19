@@ -4,3 +4,4 @@ tqdm
 black[d]
 polars
 requests
+pytest
