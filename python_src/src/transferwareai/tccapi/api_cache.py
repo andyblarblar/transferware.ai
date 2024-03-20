@@ -13,7 +13,6 @@ from polars import DataFrame
 import asyncio
 import aiohttp
 from aiofile import async_open
-import uvloop
 
 
 class ApiCache:
@@ -134,15 +133,15 @@ class ApiCache:
             return True
 
     @staticmethod
-    def from_cache(directory: Path) -> "ApiCache":
+    def from_cache(directory: Path, no_update: bool = False) -> "ApiCache":
         """Reads the cache in directory, ensures it is up-to-date, and then returns the wrapper object."""
 
         _directory = directory
         _cache_file = directory.joinpath("cache.json")
         _assets_dir = directory.joinpath("assets")  # directory for images
 
-        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-            if ApiCache._requires_update(_cache_file):
+        with asyncio.Runner() as runner:
+            if ApiCache._requires_update(_cache_file) and not no_update:
                 logging.info("Cache out of date, updating cache")
 
                 # Get patterns JSON
