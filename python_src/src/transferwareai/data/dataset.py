@@ -1,18 +1,31 @@
+import logging
+from typing import Optional
+
 import torch
-import torchvision.io
 from torch.utils.data import Dataset
 from torch import Tensor
 
 from transferwareai.tccapi.api_cache import ApiCache
 import polars as pl
 from functools import lru_cache
+import PIL.Image
 
 
 class CacheDataset(Dataset):
     """Dataset wrapping the TCC api cache."""
 
-    def __init__(self, cache: ApiCache):
+    def __init__(
+        self, cache: ApiCache, transform=None, skip_ids: Optional[list[int]] = None
+    ) -> None:
+        """
+        Create a Dataset wrapping the TCC api.
+        :param cache: TCC api cache.
+        :param transform: Transforms to apply to each image of the dataset, as they are loaded.
+        :param skip_ids: Ids to drop from the dataset.
+        """
+
         self._cache = cache
+        self._transform = transform
         self._df = cache.as_df()
 
         # ID to category label, ordered by IDs ascending
@@ -24,6 +37,7 @@ class CacheDataset(Dataset):
                 .list.first(),
             )
             .drop_nulls()
+            .filter(~pl.col("id").is_in(skip_ids or []))
             .sort(by=pl.col("id"))
         )
 
@@ -45,6 +59,7 @@ class CacheDataset(Dataset):
                 .map_rows(map_to_paths)
             )
             .rename({"column_0": "id", "column_1": "image_url"})
+            .filter(~pl.col("id").is_in(skip_ids or []))
             .join(self._class_labels, on=pl.col("id"))
             .sort(by="id")
         )
@@ -73,8 +88,13 @@ class CacheDataset(Dataset):
         """Gets the nth sample of (image, category id)"""
         _id, path, cat = self._image_paths[idx]
 
-        im = torchvision.io.read_image(path[0])
-        id_tensor = torch.tensor([self.class_id_for_category(cat[0])], dtype=torch.long)
+        # Explicitly load image as RGB, else we get alpha channels
+        im = PIL.Image.open(path[0]).convert("RGB")
+
+        if self._transform:
+            im = self._transform(im)
+
+        id_tensor = torch.tensor(self.class_id_for_category(cat[0]), dtype=torch.long)
 
         return im, id_tensor
 
@@ -83,6 +103,11 @@ class CacheDataset(Dataset):
         return len(self._image_paths)
 
     @property
+    @lru_cache(maxsize=1)
     def targets(self) -> list[int]:
         """Returns the class id for each sample in the dataset."""
         return [self.class_id_for_category(c) for c in self._image_paths["category"]]
+
+    def set_transforms(self, transforms):
+        """Sets the transformation to be applied to all images in dataset."""
+        self._transform = transforms

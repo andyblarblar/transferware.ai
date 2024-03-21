@@ -13,3 +13,4 @@ aiofile
 uvloop
 
 pytest
+tensorboard
