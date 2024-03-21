@@ -141,7 +141,7 @@ class ApiCache:
         _assets_dir = directory.joinpath("assets")  # directory for images
 
         with asyncio.Runner() as runner:
-            if ApiCache._requires_update(_cache_file) and not no_update:
+            if not no_update and ApiCache._requires_update(_cache_file):
                 logging.info("Cache out of date, updating cache")
 
                 # Get patterns JSON
@@ -157,6 +157,10 @@ class ApiCache:
             df = pl.read_json(_cache_file)
 
             logging.info(f"Loaded cache with {len(df)} patterns")
+
+            # Early return if not updating
+            if no_update:
+                return ApiCache(directory, df)
 
             # Begin collecting assets
             if not _assets_dir.exists():
@@ -230,3 +234,13 @@ class ApiCache:
 
     def as_df(self) -> DataFrame:
         return self._df
+
+    def get_image_path_for_id(self, pattern_id) -> Path:
+        """Returns path to image directory for a given id."""
+        return self._assets_dir.joinpath(str(pattern_id))
+
+    def get_image_file_path_for_tag(self, pattern_id, tag) -> Path:
+        """Returns path to a specific image file given id and tag."""
+        return self.get_image_path_for_id(pattern_id).joinpath(
+            f"{pattern_id}-{tag}.jpg"
+        )

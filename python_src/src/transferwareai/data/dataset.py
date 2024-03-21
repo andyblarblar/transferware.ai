@@ -1,6 +1,11 @@
+import torch
+import torchvision.io
 from torch.utils.data import Dataset
+from torch import Tensor
 
 from transferwareai.tccapi.api_cache import ApiCache
+import polars as pl
+from functools import lru_cache
 
 
 class CacheDataset(Dataset):
@@ -8,6 +13,71 @@ class CacheDataset(Dataset):
 
     def __init__(self, cache: ApiCache):
         self._cache = cache
+        self._df = cache.as_df()
 
+        # ID to category label, ordered by IDs ascending
+        self._class_labels = (
+            self._df.select(
+                pl.col("id"),
+                pl.col("category")
+                .list.eval(pl.element().struct.field("name"))
+                .list.first(),
+            )
+            .drop_nulls()
+            .sort(by=pl.col("id"))
+        )
+
+        def map_to_paths(row: tuple):
+            id, tag = row
+            return id, str(self._cache.get_image_file_path_for_tag(id, tag).absolute())
+
+        # IDs to category and each image file per id
+        self._image_paths = (
+            (
+                self._df.select(
+                    pl.col("id"),
+                    pl.col("images")
+                    .list.eval(pl.element().struct.field("tags"))
+                    .alias("tags"),
+                )
+                .drop_nulls()
+                .explode("tags")
+                .map_rows(map_to_paths)
+            )
+            .rename({"column_0": "id", "column_1": "image_url"})
+            .join(self._class_labels, on=pl.col("id"))
+            .sort(by="id")
+        )
+
+        # class to ID (ID to class is just the list)
+        self._class_ids = {cat: i for i, cat in enumerate(self.class_labels())}
+
+    @lru_cache(maxsize=1)
     def class_labels(self) -> list[str]:
-        pass  # TODO impl
+        """Gets the class labels for the dataset."""
+        return self._class_labels["category"].unique().sort().to_list()
+
+    def class_num(self) -> int:
+        """Gets the number of classes for the dataset."""
+        return len(self.class_labels())
+
+    def class_id_for_category(self, category: str) -> int:
+        """Gets the class id for category."""
+        return self._class_ids[category]
+
+    def category_for_id(self, id: int) -> str:
+        """Gets category for a given class id."""
+        return self.class_labels()[id]
+
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
+        """Gets the nth sample of (image, category id)"""
+        _id, path, cat = self._image_paths[idx]
+
+        im = torchvision.io.read_image(path[0])
+        id_tensor = torch.tensor([self.class_id_for_category(cat[0])], dtype=torch.long)
+
+        return im, id_tensor
+
+    def __len__(self) -> int:
+        """Total number of images in the dataset."""
+        return len(self._image_paths)
