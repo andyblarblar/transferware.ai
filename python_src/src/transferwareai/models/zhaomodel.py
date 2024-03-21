@@ -170,7 +170,7 @@ class ZhaoTrainer(Trainer):
                 )
                 writer.add_pr_curve("val/pr", one_hot_labels, probs, (epoch + 1) * step)
                 writer.add_scalar(
-                    "val/map", map_metric_eval(probs, one_hot_labels), global_step
+                    "val/map", map_metric_eval(probs, one_hot_labels), (epoch + 1) * step
                 )
 
             loss_sum_eval /= len(test_dataloader)
