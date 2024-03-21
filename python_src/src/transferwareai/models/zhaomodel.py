@@ -7,6 +7,7 @@ import torchvision
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from torchmetrics.classification import BinaryAveragePrecision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -46,7 +47,7 @@ class ZhaoTrainer(Trainer):
                 transforms.ToTensor(),
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
-        )
+        )  # TODO add augmentation
         dataset.set_transforms(transform)
 
         global_step = 0
@@ -84,10 +85,10 @@ class ZhaoTrainer(Trainer):
         test_set, train_set = create_test_train_split(dataset, test_size=0.3)
 
         test_dataloader = DataLoader(
-            test_set, batch_size=15, shuffle=False, num_workers=10
+            test_set, batch_size=9, shuffle=False, num_workers=10
         )
         train_dataloader = DataLoader(
-            train_set, batch_size=15, shuffle=True, num_workers=10
+            train_set, batch_size=9, shuffle=True, num_workers=10
         )
 
         logging.debug("Data prepared, starting training")
@@ -102,6 +103,9 @@ class ZhaoTrainer(Trainer):
         for epoch in range(epochs):
             logging.debug(f"Starting epoch {epoch}")
             loss_sum = 0
+
+            map_metric = BinaryAveragePrecision(thresholds=10).to(device)
+            map_metric_eval = BinaryAveragePrecision(thresholds=10).to(device)
             for step, (x, y) in tqdm(
                 enumerate(train_dataloader), total=len(train_dataloader)
             ):
@@ -127,6 +131,17 @@ class ZhaoTrainer(Trainer):
                 global_step += 1
 
                 writer.add_scalar("train/loss", loss, global_step)
+
+                # Create PR curve
+                probs = torch.softmax(logits, dim=1)
+                one_hot_labels = torch.nn.functional.one_hot(
+                    y, num_classes=dataset.class_num()
+                )
+                writer.add_pr_curve("train/pr", one_hot_labels, probs, global_step)
+                writer.add_scalar(
+                    "train/map", map_metric(probs, one_hot_labels), global_step
+                )
+
             loss_sum /= len(train_dataloader)
 
             # Opening the model evaluation mode
@@ -148,6 +163,16 @@ class ZhaoTrainer(Trainer):
                 loss_sum_eval = loss_sum_eval + loss.detach()
 
                 writer.add_scalar("val/loss", loss, (epoch + 1) * step)
+
+                probs = torch.softmax(logits, dim=1)
+                one_hot_labels = torch.nn.functional.one_hot(
+                    y, num_classes=dataset.class_num()
+                )
+                writer.add_pr_curve("val/pr", one_hot_labels, probs, (epoch + 1) * step)
+                writer.add_scalar(
+                    "val/map", map_metric_eval(probs, one_hot_labels), global_step
+                )
+
             loss_sum_eval /= len(test_dataloader)
 
             writer.add_scalars(
