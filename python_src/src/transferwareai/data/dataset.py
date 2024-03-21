@@ -81,3 +81,8 @@ class CacheDataset(Dataset):
     def __len__(self) -> int:
         """Total number of images in the dataset."""
         return len(self._image_paths)
+
+    @property
+    def targets(self) -> list[int]:
+        """Returns the class id for each sample in the dataset."""
+        return [self.class_id_for_category(c) for c in self._image_paths["category"]]
