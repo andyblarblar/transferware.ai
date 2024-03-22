@@ -1,6 +1,7 @@
 # This file adapts the method by Zhao et. al. in https://doi.org/10.1016/j.daach.2023.e00269
 import logging
 from pathlib import Path
+from typing import Optional
 
 import torch
 import torchvision
@@ -14,6 +15,49 @@ from tqdm import tqdm
 from .adt import Model, Validator, Trainer, AbstractModelFactory, ImageMatch
 from .utils import create_test_train_split
 from ..data.dataset import CacheDataset
+
+
+class ZhaoTorchModel:
+    def __init__(
+        self,
+        class_count: int,
+        weights: Optional[Path] = None,
+        pretrained: bool = False,
+        device="cpu",
+    ):
+        """
+        Wraps the torch model.
+        :param class_count: Number of classes
+        :param weights: Path to weights file to load
+        :param pretrained: if weights are trained for transferware, or are general pretrained weights
+        :param device: Device to load on
+        """
+        model_vgg16 = torchvision.models.vgg16()
+
+        # Loading our trained model, so need to change shape
+        if not pretrained:
+            model_vgg16.classifier[6] = torch.nn.Linear(4096, class_count)
+
+        # Load trained model if provided
+        if weights:
+            model_vgg16_pth = torch.load(weights)
+            model_vgg16.load_state_dict(model_vgg16_pth)
+
+        # The paper did this for the original data, so we shall too
+        if pretrained:
+            model_vgg16.classifier[2] = torch.nn.Dropout(p=0.5)
+            model_vgg16.classifier[5] = torch.nn.Dropout(p=0.5)
+            model_vgg16.classifier[6] = torch.nn.Linear(4096, class_count)
+
+        self.model = model_vgg16.to(device)
+        self.transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            ]
+        )
 
 
 class ZhaoModel(Model):
@@ -39,41 +83,20 @@ class ZhaoTrainer(Trainer):
     def train(self, dataset: CacheDataset) -> Model:
         logging.debug("Entering Zhao trainer")
 
-        # data pre-processing
-        transform = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-            ]
-        )  # TODO add augmentation
-        dataset.set_transforms(transform)
+        device = "cuda"  # TODO make global param
+        model_wrapper = ZhaoTorchModel(
+            dataset.class_num(), self._outer_dataset.joinpath("vgg16.pth"), True, device
+        )
+        dataset.set_transforms(model_wrapper.transform)
 
         global_step = 0
-
-        # Loading pre-trained parameters of vgg16
-        model_vgg16_pth = torch.load(self._outer_dataset.joinpath("vgg16.pth"))
-
-        # loading vgg16 model
-        model_vgg16 = torchvision.models.vgg16()
-
-        model_vgg16.load_state_dict(model_vgg16_pth)
-
-        model_vgg16.classifier[2] = torch.nn.Dropout(p=0.5)
-        model_vgg16.classifier[5] = torch.nn.Dropout(p=0.5)
-
-        # Changing the model structure to fit the categories
-        model_vgg16.classifier[6] = torch.nn.Linear(4096, dataset.class_num())
 
         # Setting learning rate
         lr = 1e-5
         # Training the model for certain number of epochs (in this case we will use 30 epochs)
         epochs = 30  # TODO update
 
-        # Using cuda for gpu training
-        device = torch.device("cuda")  # TODO make global param
-        model = model_vgg16.to(device)
+        model = model_wrapper.model
 
         # Using Adam optimizer
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -170,7 +193,9 @@ class ZhaoTrainer(Trainer):
                 )
                 writer.add_pr_curve("val/pr", one_hot_labels, probs, (epoch + 1) * step)
                 writer.add_scalar(
-                    "val/map", map_metric_eval(probs, one_hot_labels), (epoch + 1) * step
+                    "val/map",
+                    map_metric_eval(probs, one_hot_labels),
+                    (epoch + 1) * step,
                 )
 
             loss_sum_eval /= len(test_dataloader)
@@ -183,7 +208,7 @@ class ZhaoTrainer(Trainer):
             if loss_sum_eval < best_val_loss:
                 logging.debug("Saving best model")
                 torch.save(
-                    model_vgg16.state_dict(),
+                    model.state_dict(),
                     self._outer_dataset.joinpath("vgg16_train.pth"),
                 )
                 best_val_loss = loss_sum_eval
