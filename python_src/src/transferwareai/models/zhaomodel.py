@@ -62,9 +62,9 @@ class ZhaoTorchModel:
         )
 
     def get_embedding(self, image: Tensor) -> Tensor:
-        """Gets the embedding vector for the given image. The image is assumed to be preprocessed."""
-        image = image.to(self.device)
-        with torch.no_grad:
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        image = image.to(self.device).unsqueeze(0)  # Make into batch shape
+        with torch.no_grad():
             model = self.model
             x = model.features(image)  # extracting feature
             x = model.avgpool(x)  # pooling
@@ -134,7 +134,7 @@ class ZhaoTrainer(Trainer):
         # Setting learning rate
         lr = 1e-5
         # Training the model for certain number of epochs (in this case we will use 30 epochs)
-        epochs = 30  # TODO update
+        epochs = 6  # TODO update
 
         model = model_wrapper.model
 
@@ -254,18 +254,19 @@ class ZhaoTrainer(Trainer):
                 best_val_loss = loss_sum_eval
 
         # Reload best weights
-        model.load_state_dict(
-            torch.load(self._outer_dataset.joinpath("zhao_train.pth"))
+        model_wrapper = ZhaoTorchModel(
+            dataset.class_num(),
+            self._outer_dataset.joinpath("zhao_train.pth"),
+            pretrained=False,
+            device=device,
         )
 
         logging.debug("Building vector store")
         # Generate annoy cache, plotting to tensorboard
-        embeddings_projector = lambda embedding, img: writer.add_embedding(
-            mat=embedding, label_img=img
-        )
-        index, idx_mappings = self.generate_annoy_cache(
-            model_wrapper, dataset, embeddings_projector
-        )
+        # embeddings_projector = lambda embedding, img, step: writer.add_embedding(
+        #     mat=embedding.unsqueeze(0), label_img=img.unsqueeze(0), global_step=step
+        # )
+        index, idx_mappings = self.generate_annoy_cache(model_wrapper, dataset)
 
         logging.debug("Saving resources to disk")
         self.save_resources(dataset, idx_mappings, index)
@@ -306,7 +307,7 @@ class ZhaoTrainer(Trainer):
 
         pattern_ids = ds.get_pattern_ids()
 
-        for i in range(len(ds)):
+        for i in tqdm(range(len(ds))):
             # Load image
             img, _ = ds[i]
             img = img.to(model.device)
@@ -318,8 +319,8 @@ class ZhaoTrainer(Trainer):
             index.add_item(i, embedding.detach())
             aid_to_tccid.append(pattern_id)
 
-            if visitor:
-                visitor(embedding, img)
+            if visitor:  # TODO need to change this to building one big combined tensor
+                visitor(embedding, img, i)
 
         index.build(100)
         return index, aid_to_tccid
