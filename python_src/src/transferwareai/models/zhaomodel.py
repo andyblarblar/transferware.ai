@@ -1,8 +1,9 @@
 # This file adapts the method by Zhao et. al. in https://doi.org/10.1016/j.daach.2023.e00269
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
+import annoy
 import torch
 import torchvision
 from torch import Tensor
@@ -32,6 +33,7 @@ class ZhaoTorchModel:
         :param pretrained: if weights are trained for transferware, or are general pretrained weights
         :param device: Device to load on
         """
+        self.device = device
         model_vgg16 = torchvision.models.vgg16()
 
         # Loading our trained model, so need to change shape
@@ -59,20 +61,58 @@ class ZhaoTorchModel:
             ]
         )
 
+    def get_embedding(self, image: Tensor) -> Tensor:
+        """Gets the embedding vector for the given image. The image is assumed to be preprocessed."""
+        image = image.to(self.device)
+        with torch.no_grad:
+            model = self.model
+            x = model.features(image)  # extracting feature
+            x = model.avgpool(x)  # pooling
+            x = torch.flatten(x, 1)
+            # Getting and saving feature vector
+            for i in range(3):
+                x = model.classifier[i](x)
+
+            return x.cpu().reshape(4096)
+
 
 class ZhaoModel(Model):
-    def __init__(self, resource_dir: Path) -> None:
+    def __init__(self, resource_dir: Path, device) -> None:
         super().__init__()
-        # TODO load annoy and model
+        self.resource_dir = resource_dir
+        self.device = device
+
+        # All paths to resources
+        idx_path = self.resource_dir.joinpath("zhao_index.ann").absolute()
+        mappings_path = self.resource_dir.joinpath("zhao_index_mappings.pkl").absolute()
+        cnt_path = self.resource_dir.joinpath("zhao_class_count.pkl").absolute()
+        model_path = self.resource_dir.joinpath("zhao_train.pth").absolute()
+        self.resources = [idx_path, mappings_path, cnt_path, model_path]
+
+        self.class_count: int = torch.load(cnt_path)
+        self.annoy_id_to_pattern_id: list[int] = torch.load(mappings_path)
+
+        self.model = ZhaoTorchModel(self.class_count, model_path, False, device)
+
+        self.index = annoy.AnnoyIndex(4096, metric="euclidean")
+        self.index.load(str(idx_path))
 
     def query(self, image: Tensor) -> list[ImageMatch]:
-        pass
+        with torch.no_grad():
+            embedding = self.model.get_embedding(image)
 
-    def reload(self):
-        pass
+            nns, dists = self.index.get_nns_by_vector(
+                embedding.cpu().detach(), 10, include_distances=True
+            )
+            matches = [
+                ImageMatch(self.annoy_id_to_pattern_id[nn], dist)
+                for nn, dist in zip(nns, dists)
+            ]
+
+            return matches
 
     def get_resource_files(self) -> list[Path]:
-        pass
+        return self.resources
 
 
 class ZhaoTrainer(Trainer):
@@ -209,12 +249,80 @@ class ZhaoTrainer(Trainer):
                 logging.debug("Saving best model")
                 torch.save(
                     model.state_dict(),
-                    self._outer_dataset.joinpath("vgg16_train.pth"),
+                    self._outer_dataset.joinpath("zhao_train.pth"),
                 )
                 best_val_loss = loss_sum_eval
 
-        # TODO generate annoy cache here
-        return ZhaoModel(resource_dir=self._outer_dataset)
+        # Reload best weights
+        model.load_state_dict(
+            torch.load(self._outer_dataset.joinpath("zhao_train.pth"))
+        )
+
+        logging.debug("Building vector store")
+        # Generate annoy cache, plotting to tensorboard
+        embeddings_projector = lambda embedding, img: writer.add_embedding(
+            mat=embedding, label_img=img
+        )
+        index, idx_mappings = self.generate_annoy_cache(
+            model_wrapper, dataset, embeddings_projector
+        )
+
+        logging.debug("Saving resources to disk")
+        self.save_resources(dataset, idx_mappings, index)
+
+        return ZhaoModel(resource_dir=self._outer_dataset, device=device)
+
+    def save_resources(
+        self, dataset: CacheDataset, idx_mappings: list[int], index: annoy.AnnoyIndex
+    ):
+        """Saves training resources to disk"""
+        # Save to disk
+        idx_path = self._outer_dataset.joinpath("zhao_index.ann").absolute()
+        mappings_path = self._outer_dataset.joinpath(
+            "zhao_index_mappings.pkl"
+        ).absolute()
+        cnt_path = self._outer_dataset.joinpath("zhao_class_count.pkl").absolute()
+
+        index.save(str(idx_path))
+        torch.save(idx_mappings, mappings_path)
+        # We need class count later when loading the model on the api
+        torch.save(dataset.class_num(), cnt_path)
+
+    def generate_annoy_cache(
+        self,
+        model: ZhaoTorchModel,
+        ds: CacheDataset,
+        visitor: Optional[Callable] = None,
+    ) -> tuple[annoy.AnnoyIndex, list[int]]:
+        """
+        Builds an annoy index for the dataset, using embeddings given by the model. Returns the index and a list of
+        annoy index ids to pattern ids used in the dataset.
+        """
+        ds.set_transforms(model.transform)
+
+        index = annoy.AnnoyIndex(4096, metric="euclidean")
+        # Each index is the annoy id, each element is the matching tcc pattern id
+        aid_to_tccid: list[int] = []
+
+        pattern_ids = ds.get_pattern_ids()
+
+        for i in range(len(ds)):
+            # Load image
+            img, _ = ds[i]
+            img = img.to(model.device)
+            pattern_id = pattern_ids[i]
+
+            # Extract embedding
+            embedding = model.get_embedding(img)
+            # Add vector to cache
+            index.add_item(i, embedding.detach())
+            aid_to_tccid.append(pattern_id)
+
+            if visitor:
+                visitor(embedding, img)
+
+        index.build(100)
+        return index, aid_to_tccid
 
 
 class ZhaoValidator(Validator):
@@ -224,11 +332,11 @@ class ZhaoValidator(Validator):
 
 class ZhaoModelFactory(AbstractModelFactory):
 
-    def get_model(self) -> Model:
-        pass
+    def get_model(self) -> ZhaoModel:
+        return ZhaoModel(self._resource_path, "cuda")  # TODO global device
 
-    def get_trainer(self) -> Trainer:
+    def get_trainer(self) -> ZhaoTrainer:
         return ZhaoTrainer(self._resource_path)
 
-    def get_validator(self) -> Validator:
+    def get_validator(self) -> ZhaoValidator:
         return ZhaoValidator()

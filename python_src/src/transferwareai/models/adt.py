@@ -27,11 +27,6 @@ class Model(ABC):
         ...
 
     @abstractmethod
-    def reload(self):
-        """Reloads the model from disk."""
-        ...
-
-    @abstractmethod
     def get_resource_files(self) -> list[Path]:
         """
         Returns paths to all resource files associated with this model. Can be used to send to the query api after

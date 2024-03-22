@@ -123,7 +123,6 @@ classDiagram
     class Model {
         <<interface>>
         + query(image_tensor: Tensor) list~ImageMatch~
-        + reload()
         + get_resource_files() list~Path~
     }
     

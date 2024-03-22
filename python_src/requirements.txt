@@ -2,6 +2,7 @@ torch
 torchvision
 scikit-learn
 torchmetrics
+annoy
 
 tqdm
 black[d]

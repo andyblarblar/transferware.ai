@@ -111,3 +111,11 @@ class CacheDataset(Dataset):
     def set_transforms(self, transforms):
         """Sets the transformation to be applied to all images in dataset."""
         self._transform = transforms
+
+    @lru_cache(maxsize=1)
+    def get_pattern_ids(self) -> list[int]:
+        """
+        Returns the ids of patterns used in samples, in the order of get index. This means ids will duplicate for as
+        many images there are for a pattern.
+        """
+        return self._image_paths["id"].to_list()
