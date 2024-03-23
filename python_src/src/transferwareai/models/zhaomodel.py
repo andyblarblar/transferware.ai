@@ -9,7 +9,7 @@ import torch
 import torchvision
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader, RandomSampler
-from torchvision import transforms
+from torchvision.transforms import v2 as transforms
 from torchmetrics.classification import BinaryAveragePrecision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -20,6 +20,8 @@ from ..data.dataset import CacheDataset
 
 
 class ZhaoTorchModel:
+    """Wrapper around lower level torch model. Abstracts over preprocessing, and embeddings."""
+
     def __init__(
         self,
         class_count: int,
@@ -53,28 +55,55 @@ class ZhaoTorchModel:
             model_vgg16.classifier[6] = torch.nn.Linear(4096, class_count)
 
         self.model = model_vgg16.to(device)
+
+        # Preprocessing steps
+        self._norm = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
         self._transform = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
                 transforms.CenterCrop(224),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
         )
         self._transform_tensor = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
                 transforms.CenterCrop(224),
-                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
         )
+        self._augmentations = None
+        self._training = False
 
     def transform(self, img: Tensor | Image) -> Tensor:
+        """Preprocesses input, applying augmentations if in training mode."""
+        # First crop and convert to tensor
         match img:
             case Tensor():
-                return self._transform_tensor(img)
+                temp = self._transform_tensor(img)
             case Image():
-                return self._transform(img)
+                temp = self._transform(img)
+
+        # Next add augmentations
+        if self._augmentations and self._training:
+            temp = self._augmentations(temp)
+
+        # Finally norm
+        return self._norm(temp)
+
+    def training_mode(self):
+        """Toggles augmentations on."""
+        self._training = True
+
+    def eval_mode(self):
+        """Toggles augmentations off."""
+        self._training = False
+
+    def add_augmentations(self, augmentations: transforms.Transform):
+        """
+        Adds augmentation function.
+        This function will be called during transform calls only when in training mode.
+        """
+        self._augmentations = augmentations
 
     def get_embedding(self, image: Tensor) -> Tensor:
         """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
@@ -177,7 +206,7 @@ class ZhaoTrainer(Trainer):
         # Setting learning rate
         lr = 1e-5
         # Training the model for certain number of epochs (in this case we will use 30 epochs)
-        epochs = 6  # TODO update
+        epochs = 10  # TODO update
 
         model = model_wrapper.model
 
@@ -191,10 +220,20 @@ class ZhaoTrainer(Trainer):
         test_set, train_set = create_test_train_split(dataset, test_size=0.3)
 
         test_dataloader = DataLoader(
-            test_set, batch_size=9, shuffle=False, num_workers=10
+            test_set,
+            batch_size=9,
+            shuffle=False,
+            num_workers=10,
+            pin_memory=True,
+            pin_memory_device=device,
         )
         train_dataloader = DataLoader(
-            train_set, batch_size=9, shuffle=True, num_workers=10
+            train_set,
+            batch_size=9,
+            shuffle=True,
+            num_workers=10,
+            pin_memory=True,
+            pin_memory_device=device,
         )
 
         logging.debug("Data prepared, starting training")
@@ -203,7 +242,9 @@ class ZhaoTrainer(Trainer):
             str(self._outer_dataset.joinpath("tensorboard_logs").absolute())
         )
 
+        # Track val improvement for early stopping
         best_val_loss = 1e20
+        num_not_improved = 0
 
         # Training process begins
         for epoch in range(epochs):
@@ -220,6 +261,7 @@ class ZhaoTrainer(Trainer):
 
                 # Turn on model training mode
                 model.train()
+                model_wrapper.training_mode()
                 # Generating predictions
                 logits = model(x)
                 # Calculating losses
@@ -248,10 +290,11 @@ class ZhaoTrainer(Trainer):
                     "train/map", map_metric(probs, one_hot_labels), global_step
                 )
 
-            loss_sum /= len(train_dataloader)
+            loss_sum = loss_sum / len(train_dataloader)
 
             # Opening the model evaluation mode
             model.eval()
+            model_wrapper.eval_mode()
 
             logging.debug("Train complete, starting test")
 
@@ -270,6 +313,7 @@ class ZhaoTrainer(Trainer):
 
                 writer.add_scalar("val/loss", loss, (epoch + 1) * step)
 
+                # Crate PR curve
                 probs = torch.softmax(logits, dim=1)
                 one_hot_labels = torch.nn.functional.one_hot(
                     y, num_classes=dataset.class_num()
@@ -281,7 +325,7 @@ class ZhaoTrainer(Trainer):
                     (epoch + 1) * step,
                 )
 
-            loss_sum_eval /= len(test_dataloader)
+            loss_sum_eval = loss_sum_eval / len(test_dataloader)
 
             writer.add_scalars(
                 "Train vs Test", {"val": loss_sum_eval, "train": loss_sum}, global_step
@@ -295,6 +339,12 @@ class ZhaoTrainer(Trainer):
                     self._outer_dataset.joinpath("zhao_train.pth"),
                 )
                 best_val_loss = loss_sum_eval
+            else:
+                num_not_improved += 1
+
+                # Stop training if val keeps not improving TODO make param
+                if num_not_improved > 2:
+                    break
 
         # Reload best weights
         model_wrapper = ZhaoTorchModel(
@@ -305,10 +355,6 @@ class ZhaoTrainer(Trainer):
         )
 
         logging.debug("Building vector store")
-        # Generate annoy cache, plotting to tensorboard
-        # embeddings_projector = lambda embedding, img, step: writer.add_embedding(
-        #     mat=embedding.unsqueeze(0), label_img=img.unsqueeze(0), global_step=step
-        # )
         index, idx_mappings = self.generate_annoy_cache(model_wrapper, dataset)
 
         logging.debug("Saving resources to disk")
@@ -362,7 +408,7 @@ class ZhaoTrainer(Trainer):
             index.add_item(i, embedding.detach())
             aid_to_tccid.append(pattern_id)
 
-            if visitor:  # TODO need to change this to building one big combined tensor
+            if visitor:
                 visitor(embedding, img, i)
 
         index.build(100)
@@ -383,4 +429,4 @@ class ZhaoModelFactory(AbstractModelFactory):
         return ZhaoTrainer(self._resource_path)
 
     def get_validator(self) -> ZhaoValidator:
-        return ZhaoValidator()
+        return ZhaoValidator()  # TODO can prob use generic
