@@ -3,11 +3,12 @@ import logging
 from pathlib import Path
 from typing import Optional, Callable
 
+from PIL.Image import Image
 import annoy
 import torch
 import torchvision
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, RandomSampler
 from torchvision import transforms
 from torchmetrics.classification import BinaryAveragePrecision
 from torch.utils.tensorboard import SummaryWriter
@@ -52,7 +53,7 @@ class ZhaoTorchModel:
             model_vgg16.classifier[6] = torch.nn.Linear(4096, class_count)
 
         self.model = model_vgg16.to(device)
-        self.transform = transforms.Compose(
+        self._transform = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
                 transforms.CenterCrop(224),
@@ -60,6 +61,20 @@ class ZhaoTorchModel:
                 transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
             ]
         )
+        self._transform_tensor = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                transforms.CenterCrop(224),
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            ]
+        )
+
+    def transform(self, img: Tensor | Image) -> Tensor:
+        match img:
+            case Tensor():
+                return self._transform_tensor(img)
+            case Image():
+                return self._transform(img)
 
     def get_embedding(self, image: Tensor) -> Tensor:
         """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
@@ -97,8 +112,12 @@ class ZhaoModel(Model):
         self.index = annoy.AnnoyIndex(4096, metric="euclidean")
         self.index.load(str(idx_path))
 
-    def query(self, image: Tensor) -> list[ImageMatch]:
+    def query(self, image: Tensor | Image) -> list[ImageMatch]:
         with torch.no_grad():
+            # Preprocess
+            image = self.model.transform(image)
+            image = image.to(self.device).float()
+
             embedding = self.model.get_embedding(image)
 
             nns, dists = self.index.get_nns_by_vector(
@@ -113,6 +132,30 @@ class ZhaoModel(Model):
 
     def get_resource_files(self) -> list[Path]:
         return self.resources
+
+    def make_tensorboard_projection(self, data: CacheDataset, sample_size: int):
+        writer = SummaryWriter(
+            log_dir=str(self.resource_dir.joinpath("tensorboard_logs").absolute())
+        )
+        data.set_transforms(self.model.transform)
+        tensors = []
+        embeddings = []
+
+        sampler = RandomSampler(data, num_samples=sample_size)
+
+        for i in tqdm(sampler):
+            x, _ = data[i]
+            x = x.to(self.device)
+            embedding = self.model.get_embedding(x)
+
+            embeddings.append(embedding)
+            tensors.append(x)
+
+        biiiig_img = torch.stack(tensors)
+        biiiig_emb = torch.stack(embeddings)
+
+        logging.debug("Writing embeddings to tensorboard")
+        writer.add_embedding(biiiig_emb, label_img=biiiig_img, global_step=0)
 
 
 class ZhaoTrainer(Trainer):
