@@ -5,6 +5,8 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from dataclasses import dataclass
 
+from torchvision.datasets import ImageFolder
+
 from ..data.dataset import CacheDataset
 
 
@@ -24,11 +26,6 @@ class Model(ABC):
     @abstractmethod
     def query(self, image: Tensor) -> list[ImageMatch]:
         """Takes the input image, and finds the 10 closest images from the dataset used for training."""
-        ...
-
-    @abstractmethod
-    def reload(self):
-        """Reloads the model from disk."""
         ...
 
     @abstractmethod
@@ -53,10 +50,13 @@ class Validator(ABC):
     """Interface for validation techniques."""
 
     @abstractmethod
-    def validate(self, model: Model, validation_set: Dataset) -> float:
+    def validate(
+        self, model: Model, validation_set: ImageFolder
+    ) -> tuple[dict[int, float], float]:
         """
-        Validates the model against real world, untrained data. Returns validation percent. This is a validation
-        of the model in the final system, rather than validation in a deep learning context.
+        Validates the model against real world, untrained data. Returns validation percent, and a dict of accuracy
+        per id. This is a validation of the model in the final system,
+        rather than validation in a deep learning context.
         """
         ...
 

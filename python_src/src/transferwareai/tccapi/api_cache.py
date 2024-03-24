@@ -241,6 +241,7 @@ class ApiCache:
 
     def get_image_file_path_for_tag(self, pattern_id, tag) -> Path:
         """Returns path to a specific image file given id and tag."""
+        tag = tag.replace("/", "_")
         return self.get_image_path_for_id(pattern_id).joinpath(
             f"{pattern_id}-{tag}.jpg"
         )

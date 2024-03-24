@@ -1,8 +1,12 @@
 torch
 torchvision
+scikit-learn
+torchmetrics
+annoy
 
 tqdm
 black[d]
+dynaconf
 
 polars
 requests
@@ -12,3 +16,4 @@ aiofile
 uvloop
 
 pytest
+tensorboard

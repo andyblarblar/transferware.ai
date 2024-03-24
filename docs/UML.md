@@ -123,7 +123,6 @@ classDiagram
     class Model {
         <<interface>>
         + query(image_tensor: Tensor) list~ImageMatch~
-        + reload()
         + get_resource_files() list~Path~
     }
     
@@ -134,7 +133,7 @@ classDiagram
     
     class Validator {
         <<interface>>
-        + validate(model: Model, validation_data: Dataset) float
+        + validate(model: Model, validation_data: ImageFolder) tuple~dict[int, float], float~
     }
     
     class AbstractModelFactory {
@@ -160,6 +159,75 @@ The end application should load a specific factory based off configurations, so 
 encapsulated within these three classes. This should make it trivial to then swap in something like SIFT matching 
 instead of a deep learning approach, while still allowing enough complexity for embedding approaches.
 
+## Embeddings model
+
+```mermaid
+classDiagram
+    class ImageMatch {
+        + id: int
+        + confidence: float
+    }
+
+    class Model {
+        <<interface>>
+        + query(image_tensor: Tensor) list~ImageMatch~
+        + get_resource_files() list~Path~
+    }
+
+    class Trainer {
+        <<interface>>
+        + train(dataset: CacheDataset) Model
+    }
+
+    class Validator {
+        <<interface>>
+        + validate(model: Model, validation_data: ImageFolder) float
+    }
+
+    class AbstractModelFactory {
+        <<abstract>>
+        - resource_dir: Path
+        + AbstractModelFactory(resource_dir: Path)
+        + get_model() Model
+        + get_trainer() Trainer
+        + get_validator() Validator
+    }
+
+    class ZhaoModelFactory
+    class ZhaoModel {
+        + make_tensorboard_projection(ata: CacheDataset, sample_size: int)
+    }
+    class EmbeddingsModelImplementation {
+        <<abstract>>
+        + transform(self, img: Tensor | Image)*
+        + training_mode()
+        + eval_mode()
+        + add_augmentations(self, augmentations: transforms.Transform)
+        + get_embedding(self, image: Tensor | Image)*
+    }
+    class ZhaoTrainer {
+        + generate_annoy_cache(model: EmbeddingsModelImplementation, ds: CacheDataset, visitor: Optional[Callable] = None) tuple~annoy.AnnoyIndex, list[int]~
+    }
+    class GenericValidator
+    class AnnoyIndex
+
+    Model *-- ImageMatch
+    AbstractModelFactory *-- Model
+    AbstractModelFactory *-- Trainer
+    AbstractModelFactory *-- Validator
+    AbstractModelFactory <|-- ZhaoModelFactory
+    Model <|-- ZhaoModel
+    Validator <|-- GenericValidator
+    ZhaoModel *-- EmbeddingsModelImplementation
+    ZhaoModel *-- AnnoyIndex
+    EmbeddingsModelImplementation <|-- ZhaoVGGModel
+    Trainer <|--ZhaoTrainer
+    ZhaoTrainer *-- EmbeddingsModelImplementation
+```
+The embeddings approach uses a bridge to decouple the low level torch implementations that create the embeddings
+themselves from the high level embeddings search logic. This allows us to easily experiment with different underlying
+NN architectures without needing to change the rest of the code. This is not really for runtime behavior, just
+structure.
 ## Dataset
 ```mermaid
 classDiagram
@@ -198,8 +266,9 @@ The dataset is backed by a wrapper over the API cache, where the API cache is re
 This setup allows for us to easily make drastic changes in class choice, as we don't need to change a directory layout,
 just change some dataframe queries. Get item is returning image, class_id pairs.
 
-## Training 
+## Training Script
 
+TODO
 ```mermaid
 
 ```
