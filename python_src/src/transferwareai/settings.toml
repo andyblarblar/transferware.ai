@@ -1,0 +1,21 @@
+#TODO add global setting for what abstract factory to load, and make a factory for handling it
+
+# Settings for the training script
+[training]
+torch_device = "cuda"
+# Num epochs to train
+epochs = 30
+# Number of epochs val loss worsens before we early stop
+early_stopping_thresh = 3
+# Num images loaded per step in epoch
+batch_size = 9
+# The directory the cache and model resources will be written to
+resource_dir = "./" # TODO change for prod
+# Validation directory. Should contain folders of pattern ids with images in them.
+validation_dir = "./val" # TODO change for prod
+
+# Settings for the query api
+[query]
+torch_device = "cuda"
+# The directory the cache and model resources will be read from, and written to on update
+resource_dir = "./" # TODO change for prod

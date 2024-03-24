@@ -19,6 +19,7 @@ from .adt import Model, Trainer, AbstractModelFactory, ImageMatch
 from .generic import GenericValidator
 from .utils import create_test_train_split
 from ..data.dataset import CacheDataset
+from ..config import settings
 
 
 class EmbeddingsModelImplementation(metaclass=ABCMeta):
@@ -122,6 +123,7 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
         image = image.to(self.device).unsqueeze(0)  # Make into batch shape
         with torch.no_grad():
             model = self.model
+            model.eval()
             x = model.features(image)  # extracting feature
             x = model.avgpool(x)  # pooling
             x = torch.flatten(x, 1)
@@ -136,6 +138,13 @@ T = TypeVar("T", bound=EmbeddingsModelImplementation)
 
 
 class ZhaoModel(Model):
+    """
+    Implementation of the query interface using an embeddings search approach.
+    This class is the abstraction to the `EmbeddingsModelImplementation` implementation, in the GoF Bridge pattern.
+    This class should handle the interactions between the vector store and underlying model, whereas that implementation
+    handles the low level torch model details.
+    """
+
     def __init__(
         self, resource_dir: Path, device, implementation_class: Type[T]
     ) -> None:
@@ -183,6 +192,7 @@ class ZhaoModel(Model):
         return self.resources
 
     def make_tensorboard_projection(self, data: CacheDataset, sample_size: int):
+        """Creates an embeddings projection for tensorflow with a certain sample size."""
         writer = SummaryWriter(
             log_dir=str(self.resource_dir.joinpath("tensorboard_logs").absolute())
         )
@@ -208,15 +218,16 @@ class ZhaoModel(Model):
 
 
 class ZhaoTrainer(Trainer):
-    def __init__(self, outer_dataset: Path, implementation_class: Type[T]):
+    def __init__(self, outer_dataset: Path, implementation_class: Type[T], device: str):
         super().__init__()
         self._outer_dataset = outer_dataset
         self._implementation_class = implementation_class
+        self._device = device
 
     def train(self, dataset: CacheDataset) -> Model:
         logging.debug("Entering Zhao trainer")
 
-        device = "cuda"  # TODO make global param
+        device = self._device
         model_wrapper = self._implementation_class(
             dataset.class_num(), None, True, device
         )
@@ -232,8 +243,8 @@ class ZhaoTrainer(Trainer):
 
         # Setting learning rate
         lr = 1e-5
-        # Training the model for certain number of epochs (in this case we will use 30 epochs)
-        epochs = 30  # TODO update
+        # Training the model for certain number of epochs
+        epochs = settings.training.epochs
 
         model = model_wrapper.model
 
@@ -248,7 +259,7 @@ class ZhaoTrainer(Trainer):
 
         test_dataloader = DataLoader(
             test_set,
-            batch_size=9,
+            batch_size=settings.training.batch_size,
             shuffle=False,
             num_workers=10,
             pin_memory=True,
@@ -256,7 +267,7 @@ class ZhaoTrainer(Trainer):
         )
         train_dataloader = DataLoader(
             train_set,
-            batch_size=9,
+            batch_size=settings.training.batch_size,
             shuffle=True,
             num_workers=10,
             pin_memory=True,
@@ -340,7 +351,7 @@ class ZhaoTrainer(Trainer):
 
                 writer.add_scalar("val/loss", loss, (epoch + 1) * step)
 
-                # Crate PR curve
+                # Create PR curve
                 probs = torch.softmax(logits, dim=1)
                 one_hot_labels = torch.nn.functional.one_hot(
                     y, num_classes=dataset.class_num()
@@ -363,16 +374,21 @@ class ZhaoTrainer(Trainer):
                 logging.debug("Saving best model")
                 torch.save(
                     model.state_dict(),
-                    self._outer_dataset.joinpath("zhao_train.pth"),
+                    self._outer_dataset.joinpath("zhao_train_best.pth"),
                 )
                 best_val_loss = loss_sum_eval
                 num_not_improved = 0
             else:
                 num_not_improved += 1
 
-                # Stop training if val keeps not improving TODO make param
-                if num_not_improved > 2:
+                # Stop training if val keeps not improving
+                if num_not_improved > settings.training.early_stopping_thresh:
                     break
+
+        # Rename best weights so they load automatically
+        self._outer_dataset.joinpath("zhao_train_best.pth").rename(
+            self._outer_dataset.joinpath("zhao_train.pth")
+        )
 
         # Reload best weights
         model_wrapper = self._implementation_class(
@@ -448,18 +464,23 @@ class ZhaoTrainer(Trainer):
 
 
 class ZhaoModelFactory(AbstractModelFactory):
-    def __init__(self, resource_path: Path):
+    def __init__(self, resource_path: Path, device: str):
         super().__init__(resource_path)
         # Underlying torch class wrapper used, allows for swapping model backends
         self._implementation_class = ZhaoVGGModel
+        self._device = device
 
     def get_model(self) -> ZhaoModel:
         return ZhaoModel(
-            self._resource_path, "cuda", implementation_class=self._implementation_class
-        )  # TODO global device
+            self._resource_path,
+            self._device,
+            self._implementation_class,
+        )
 
     def get_trainer(self) -> ZhaoTrainer:
-        return ZhaoTrainer(self._resource_path, self._implementation_class)
+        return ZhaoTrainer(
+            self._resource_path, self._implementation_class, self._device
+        )
 
     def get_validator(self) -> GenericValidator:
-        return GenericValidator("cuda")  # TODO global device
+        return GenericValidator(self._device)

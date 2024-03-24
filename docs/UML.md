@@ -198,6 +198,7 @@ classDiagram
         + make_tensorboard_projection(ata: CacheDataset, sample_size: int)
     }
     class EmbeddingsModelImplementation {
+        <<abstract>>
         + transform(self, img: Tensor | Image)*
         + training_mode()
         + eval_mode()
@@ -208,6 +209,7 @@ classDiagram
         + generate_annoy_cache(model: EmbeddingsModelImplementation, ds: CacheDataset, visitor: Optional[Callable] = None) tuple~annoy.AnnoyIndex, list[int]~
     }
     class GenericValidator
+    class AnnoyIndex
 
     Model *-- ImageMatch
     AbstractModelFactory *-- Model
@@ -217,11 +219,15 @@ classDiagram
     Model <|-- ZhaoModel
     Validator <|-- GenericValidator
     ZhaoModel *-- EmbeddingsModelImplementation
+    ZhaoModel *-- AnnoyIndex
     EmbeddingsModelImplementation <|-- ZhaoVGGModel
     Trainer <|--ZhaoTrainer
     ZhaoTrainer *-- EmbeddingsModelImplementation
 ```
-
+The embeddings approach uses a bridge to decouple the low level torch implementations that create the embeddings
+themselves from the high level embeddings search logic. This allows us to easily experiment with different underlying
+NN architectures without needing to change the rest of the code. This is not really for runtime behavior, just
+structure.
 ## Dataset
 ```mermaid
 classDiagram
@@ -260,8 +266,9 @@ The dataset is backed by a wrapper over the API cache, where the API cache is re
 This setup allows for us to easily make drastic changes in class choice, as we don't need to change a directory layout,
 just change some dataframe queries. Get item is returning image, class_id pairs.
 
-## Training 
+## Training Script
 
+TODO
 ```mermaid
 
 ```

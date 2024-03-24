@@ -6,6 +6,7 @@ annoy
 
 tqdm
 black[d]
+dynaconf
 
 polars
 requests
