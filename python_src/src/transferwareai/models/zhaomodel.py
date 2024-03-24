@@ -1,27 +1,61 @@
 # This file adapts the method by Zhao et. al. in https://doi.org/10.1016/j.daach.2023.e00269
 import logging
+from abc import ABCMeta, abstractmethod
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Type, TypeVar
 
 from PIL.Image import Image
 import annoy
 import torch
 import torchvision
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, RandomSampler
+from torch.utils.data import DataLoader, RandomSampler
 from torchvision.transforms import v2 as transforms
 from torchmetrics.classification import BinaryAveragePrecision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from .adt import Model, Validator, Trainer, AbstractModelFactory, ImageMatch
+from .adt import Model, Trainer, AbstractModelFactory, ImageMatch
 from .generic import GenericValidator
 from .utils import create_test_train_split
 from ..data.dataset import CacheDataset
 
 
-class ZhaoTorchModel:  # TODO break into interface
-    """Wrapper around lower level torch model. Abstracts over preprocessing, and embeddings."""
+class EmbeddingsModelImplementation(metaclass=ABCMeta):
+    """Superclass for implementations of torch models for getting embeddings."""
+
+    def __init__(self):
+        self._augmentations = None
+        self._training = False
+
+    @abstractmethod
+    def transform(self, img: Tensor | Image):
+        """Preprocesses input, applying augmentations if in training mode."""
+        pass
+
+    def training_mode(self):
+        """Toggles augmentations on."""
+        self._training = True
+
+    def eval_mode(self):
+        """Toggles augmentations off."""
+        self._training = False
+
+    def add_augmentations(self, augmentations: transforms.Transform):
+        """
+        Adds augmentation function.
+        This function will be called during transform calls only when in training mode.
+        """
+        self._augmentations = augmentations
+
+    @abstractmethod
+    def get_embedding(self, image: Tensor | Image):
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        pass
+
+
+class ZhaoVGGModel(EmbeddingsModelImplementation):
+    """Original VGG model from the Zhao paper."""
 
     def __init__(
         self,
@@ -37,8 +71,17 @@ class ZhaoTorchModel:  # TODO break into interface
         :param pretrained: if weights are trained for transferware, or are general pretrained weights
         :param device: Device to load on
         """
+        super().__init__()
+
         self.device = device
-        model_vgg16 = torchvision.models.vgg16()
+        # Use torch weights if we are using a pretrained weights and passed none
+        model_vgg16 = torchvision.models.vgg16(
+            weights=(
+                torchvision.models.VGG16_Weights.IMAGENET1K_V1
+                if pretrained and weights is None
+                else None
+            )
+        )
 
         # Loading our trained model, so need to change shape
         if not pretrained:
@@ -58,57 +101,21 @@ class ZhaoTorchModel:  # TODO break into interface
         self.model = model_vgg16.to(device)
 
         # Preprocessing steps
-        self._norm = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]).to(
-            device
-        )
-        self._transform = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                transforms.Grayscale(3),
-            ]
-        ).to(device)
-        self._transform_tensor = transforms.Compose(
-            [
-                transforms.Resize((224, 224)),
-                transforms.CenterCrop(224),
-                transforms.Grayscale(3),
-            ]
-        ).to(device)
-        self._augmentations = None
-        self._training = False
+        self._transform = torchvision.models.VGG16_Weights.IMAGENET1K_V1.transforms()
 
     def transform(self, img: Tensor | Image) -> Tensor:
         """Preprocesses input, applying augmentations if in training mode."""
-        # First crop and convert to tensor
+        # First convert to tensor
         match img:
-            case Tensor():
-                temp = self._transform_tensor(img)
             case Image():
-                temp = self._transform(img)
+                temp = transforms.ToTensor()(img)
 
         # Next add augmentations
         if self._augmentations and self._training:
             temp = self._augmentations(temp)
 
         # Finally norm
-        return self._norm(temp)
-
-    def training_mode(self):
-        """Toggles augmentations on."""
-        self._training = True
-
-    def eval_mode(self):
-        """Toggles augmentations off."""
-        self._training = False
-
-    def add_augmentations(self, augmentations: transforms.Transform):
-        """
-        Adds augmentation function.
-        This function will be called during transform calls only when in training mode.
-        """
-        self._augmentations = augmentations
+        return self._transform(temp)
 
     def get_embedding(self, image: Tensor) -> Tensor:
         """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
@@ -125,11 +132,17 @@ class ZhaoTorchModel:  # TODO break into interface
             return x.cpu().reshape(4096)
 
 
+T = TypeVar("T", bound=EmbeddingsModelImplementation)
+
+
 class ZhaoModel(Model):
-    def __init__(self, resource_dir: Path, device) -> None:
+    def __init__(
+        self, resource_dir: Path, device, implementation_class: Type[T]
+    ) -> None:
         super().__init__()
         self.resource_dir = resource_dir
         self.device = device
+        self._implementation_class = implementation_class
 
         # All paths to resources
         idx_path = self.resource_dir.joinpath("zhao_index.ann").absolute()
@@ -141,7 +154,9 @@ class ZhaoModel(Model):
         self.class_count: int = torch.load(cnt_path)
         self.annoy_id_to_pattern_id: list[int] = torch.load(mappings_path)
 
-        self.model = ZhaoTorchModel(self.class_count, model_path, False, device)
+        self.model: T = self._implementation_class(
+            self.class_count, model_path, False, device
+        )
 
         self.index = annoy.AnnoyIndex(4096, metric="euclidean")
         self.index.load(str(idx_path))
@@ -193,16 +208,17 @@ class ZhaoModel(Model):
 
 
 class ZhaoTrainer(Trainer):
-    def __init__(self, outer_dataset: Path):
+    def __init__(self, outer_dataset: Path, implementation_class: Type[T]):
         super().__init__()
         self._outer_dataset = outer_dataset
+        self._implementation_class = implementation_class
 
     def train(self, dataset: CacheDataset) -> Model:
         logging.debug("Entering Zhao trainer")
 
         device = "cuda"  # TODO make global param
-        model_wrapper = ZhaoTorchModel(
-            dataset.class_num(), self._outer_dataset.joinpath("vgg16.pth"), True, device
+        model_wrapper = self._implementation_class(
+            dataset.class_num(), None, True, device
         )
         augmentations = transforms.Compose(
             [
@@ -359,7 +375,7 @@ class ZhaoTrainer(Trainer):
                     break
 
         # Reload best weights
-        model_wrapper = ZhaoTorchModel(
+        model_wrapper = self._implementation_class(
             dataset.class_num(),
             self._outer_dataset.joinpath("zhao_train.pth"),
             pretrained=False,
@@ -372,7 +388,11 @@ class ZhaoTrainer(Trainer):
         logging.debug("Saving resources to disk")
         self.save_resources(dataset, idx_mappings, index)
 
-        return ZhaoModel(resource_dir=self._outer_dataset, device=device)
+        return ZhaoModel(
+            resource_dir=self._outer_dataset,
+            device=device,
+            implementation_class=self._implementation_class,
+        )
 
     def save_resources(
         self, dataset: CacheDataset, idx_mappings: list[int], index: annoy.AnnoyIndex
@@ -392,7 +412,7 @@ class ZhaoTrainer(Trainer):
 
     def generate_annoy_cache(
         self,
-        model: ZhaoTorchModel,
+        model: T,
         ds: CacheDataset,
         visitor: Optional[Callable] = None,
     ) -> tuple[annoy.AnnoyIndex, list[int]]:
@@ -428,12 +448,18 @@ class ZhaoTrainer(Trainer):
 
 
 class ZhaoModelFactory(AbstractModelFactory):
+    def __init__(self, resource_path: Path):
+        super().__init__(resource_path)
+        # Underlying torch class wrapper used, allows for swapping model backends
+        self._implementation_class = ZhaoVGGModel
 
     def get_model(self) -> ZhaoModel:
-        return ZhaoModel(self._resource_path, "cuda")  # TODO global device
+        return ZhaoModel(
+            self._resource_path, "cuda", implementation_class=self._implementation_class
+        )  # TODO global device
 
     def get_trainer(self) -> ZhaoTrainer:
-        return ZhaoTrainer(self._resource_path)
+        return ZhaoTrainer(self._resource_path, self._implementation_class)
 
     def get_validator(self) -> GenericValidator:
         return GenericValidator("cuda")  # TODO global device

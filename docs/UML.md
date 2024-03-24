@@ -159,6 +159,69 @@ The end application should load a specific factory based off configurations, so 
 encapsulated within these three classes. This should make it trivial to then swap in something like SIFT matching 
 instead of a deep learning approach, while still allowing enough complexity for embedding approaches.
 
+## Embeddings model
+
+```mermaid
+classDiagram
+    class ImageMatch {
+        + id: int
+        + confidence: float
+    }
+
+    class Model {
+        <<interface>>
+        + query(image_tensor: Tensor) list~ImageMatch~
+        + get_resource_files() list~Path~
+    }
+
+    class Trainer {
+        <<interface>>
+        + train(dataset: CacheDataset) Model
+    }
+
+    class Validator {
+        <<interface>>
+        + validate(model: Model, validation_data: ImageFolder) float
+    }
+
+    class AbstractModelFactory {
+        <<abstract>>
+        - resource_dir: Path
+        + AbstractModelFactory(resource_dir: Path)
+        + get_model() Model
+        + get_trainer() Trainer
+        + get_validator() Validator
+    }
+
+    class ZhaoModelFactory
+    class ZhaoModel {
+        + make_tensorboard_projection(ata: CacheDataset, sample_size: int)
+    }
+    class EmbeddingsModelImplementation {
+        + transform(self, img: Tensor | Image)*
+        + training_mode()
+        + eval_mode()
+        + add_augmentations(self, augmentations: transforms.Transform)
+        + get_embedding(self, image: Tensor | Image)*
+    }
+    class ZhaoTrainer {
+        + generate_annoy_cache(model: EmbeddingsModelImplementation, ds: CacheDataset, visitor: Optional[Callable] = None) tuple~annoy.AnnoyIndex, list[int]~
+    }
+    class GenericValidator
+
+    Model *-- ImageMatch
+    AbstractModelFactory *-- Model
+    AbstractModelFactory *-- Trainer
+    AbstractModelFactory *-- Validator
+    AbstractModelFactory <|-- ZhaoModelFactory
+    Model <|-- ZhaoModel
+    Validator <|-- GenericValidator
+    ZhaoModel *-- EmbeddingsModelImplementation
+    EmbeddingsModelImplementation <|-- ZhaoVGGModel
+    Trainer <|--ZhaoTrainer
+    ZhaoTrainer *-- EmbeddingsModelImplementation
+```
+
 ## Dataset
 ```mermaid
 classDiagram
