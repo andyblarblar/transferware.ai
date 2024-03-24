@@ -5,6 +5,8 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from dataclasses import dataclass
 
+from torchvision.datasets import ImageFolder
+
 from ..data.dataset import CacheDataset
 
 
@@ -48,7 +50,7 @@ class Validator(ABC):
     """Interface for validation techniques."""
 
     @abstractmethod
-    def validate(self, model: Model, validation_set: Dataset) -> float:
+    def validate(self, model: Model, validation_set: ImageFolder) -> float:
         """
         Validates the model against real world, untrained data. Returns validation percent. This is a validation
         of the model in the final system, rather than validation in a deep learning context.

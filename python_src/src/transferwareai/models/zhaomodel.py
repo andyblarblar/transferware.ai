@@ -15,11 +15,12 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from .adt import Model, Validator, Trainer, AbstractModelFactory, ImageMatch
+from .generic import GenericValidator
 from .utils import create_test_train_split
 from ..data.dataset import CacheDataset
 
 
-class ZhaoTorchModel:
+class ZhaoTorchModel:  # TODO break into interface
     """Wrapper around lower level torch model. Abstracts over preprocessing, and embeddings."""
 
     def __init__(
@@ -57,20 +58,24 @@ class ZhaoTorchModel:
         self.model = model_vgg16.to(device)
 
         # Preprocessing steps
-        self._norm = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        self._norm = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]).to(
+            device
+        )
         self._transform = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
                 transforms.CenterCrop(224),
                 transforms.ToTensor(),
+                transforms.Grayscale(3),
             ]
-        )
+        ).to(device)
         self._transform_tensor = transforms.Compose(
             [
                 transforms.Resize((224, 224)),
                 transforms.CenterCrop(224),
+                transforms.Grayscale(3),
             ]
-        )
+        ).to(device)
         self._augmentations = None
         self._training = False
 
@@ -199,6 +204,12 @@ class ZhaoTrainer(Trainer):
         model_wrapper = ZhaoTorchModel(
             dataset.class_num(), self._outer_dataset.joinpath("vgg16.pth"), True, device
         )
+        augmentations = transforms.Compose(
+            [
+                transforms.RandomRotation(110, fill=(255, 255, 255)),
+            ]
+        ).to(device)
+        model_wrapper.add_augmentations(augmentations)
         dataset.set_transforms(model_wrapper.transform)
 
         global_step = 0
@@ -206,7 +217,7 @@ class ZhaoTrainer(Trainer):
         # Setting learning rate
         lr = 1e-5
         # Training the model for certain number of epochs (in this case we will use 30 epochs)
-        epochs = 10  # TODO update
+        epochs = 30  # TODO update
 
         model = model_wrapper.model
 
@@ -251,6 +262,7 @@ class ZhaoTrainer(Trainer):
             logging.debug(f"Starting epoch {epoch}")
             loss_sum = 0
 
+            model_wrapper.training_mode()
             map_metric = BinaryAveragePrecision(thresholds=10).to(device)
             map_metric_eval = BinaryAveragePrecision(thresholds=10).to(device)
             for step, (x, y) in tqdm(
@@ -261,7 +273,6 @@ class ZhaoTrainer(Trainer):
 
                 # Turn on model training mode
                 model.train()
-                model_wrapper.training_mode()
                 # Generating predictions
                 logits = model(x)
                 # Calculating losses
@@ -339,6 +350,7 @@ class ZhaoTrainer(Trainer):
                     self._outer_dataset.joinpath("zhao_train.pth"),
                 )
                 best_val_loss = loss_sum_eval
+                num_not_improved = 0
             else:
                 num_not_improved += 1
 
@@ -411,13 +423,8 @@ class ZhaoTrainer(Trainer):
             if visitor:
                 visitor(embedding, img, i)
 
-        index.build(100)
+        index.build(1000)
         return index, aid_to_tccid
-
-
-class ZhaoValidator(Validator):
-    def validate(self, model: Model, validation_set: Dataset) -> float:
-        pass
 
 
 class ZhaoModelFactory(AbstractModelFactory):
@@ -428,5 +435,5 @@ class ZhaoModelFactory(AbstractModelFactory):
     def get_trainer(self) -> ZhaoTrainer:
         return ZhaoTrainer(self._resource_path)
 
-    def get_validator(self) -> ZhaoValidator:
-        return ZhaoValidator()  # TODO can prob use generic
+    def get_validator(self) -> GenericValidator:
+        return GenericValidator("cuda")  # TODO global device

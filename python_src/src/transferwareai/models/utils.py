@@ -1,7 +1,9 @@
 from torch.utils.data import Subset, Dataset
 from sklearn.model_selection import train_test_split
+import polars as pl
 
 from transferwareai.data.dataset import CacheDataset
+from transferwareai.tccapi.api_cache import ApiCache
 
 
 def create_test_train_split(
@@ -22,3 +24,15 @@ def create_test_train_split(
     test_split = Subset(data, test_indices)
 
     return test_split, train_split
+
+
+def pattern_number_to_id(api: ApiCache, pattern_id: int) -> int:
+    """Converts a pattern id to its corresponding id in the DB. Pattern ids are what are found on the TCC website,
+    the other id is the one used in this tool."""
+    df = api.as_df()
+    res = (
+        df.select(pl.col("pattern_number"), pl.col("id")).filter(
+            pl.col("pattern_number") == pattern_id
+        )
+    )["id"][0]
+    return int(res)

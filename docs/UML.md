@@ -133,7 +133,7 @@ classDiagram
     
     class Validator {
         <<interface>>
-        + validate(model: Model, validation_data: Dataset) float
+        + validate(model: Model, validation_data: ImageFolder) float
     }
     
     class AbstractModelFactory {
