@@ -110,6 +110,8 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
         match img:
             case Image():
                 temp = transforms.ToTensor()(img)
+            case Tensor():
+                temp = img
 
         # Next add augmentations
         if self._augmentations and self._training:
@@ -163,10 +165,12 @@ class ZhaoModel(Model):
         self.class_count: int = torch.load(cnt_path)
         self.annoy_id_to_pattern_id: list[int] = torch.load(mappings_path)
 
+        logging.debug(f"Loading model implementation: {implementation_class.__name__}")
         self.model: T = self._implementation_class(
             self.class_count, model_path, False, device
         )
 
+        logging.debug(f"Loading annoy index")
         self.index = annoy.AnnoyIndex(4096, metric="euclidean")
         self.index.load(str(idx_path))
 

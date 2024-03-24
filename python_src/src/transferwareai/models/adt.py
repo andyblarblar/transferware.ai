@@ -50,10 +50,13 @@ class Validator(ABC):
     """Interface for validation techniques."""
 
     @abstractmethod
-    def validate(self, model: Model, validation_set: ImageFolder) -> float:
+    def validate(
+        self, model: Model, validation_set: ImageFolder
+    ) -> tuple[dict[int, float], float]:
         """
-        Validates the model against real world, untrained data. Returns validation percent. This is a validation
-        of the model in the final system, rather than validation in a deep learning context.
+        Validates the model against real world, untrained data. Returns validation percent, and a dict of accuracy
+        per id. This is a validation of the model in the final system,
+        rather than validation in a deep learning context.
         """
         ...
 

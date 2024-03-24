@@ -133,7 +133,7 @@ classDiagram
     
     class Validator {
         <<interface>>
-        + validate(model: Model, validation_data: ImageFolder) float
+        + validate(model: Model, validation_data: ImageFolder) tuple~dict[int, float], float~
     }
     
     class AbstractModelFactory {
