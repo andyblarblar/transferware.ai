@@ -11,6 +11,7 @@ import torchvision
 from torch import Tensor
 from torch.utils.data import DataLoader, RandomSampler
 from torchvision.transforms import v2 as transforms
+from torchvision.models.feature_extraction import create_feature_extractor
 from torchmetrics.classification import BinaryAveragePrecision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -54,9 +55,17 @@ class EmbeddingsModelImplementation(metaclass=ABCMeta):
         """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
         pass
 
+    @abstractmethod
+    def embedding_size(self) -> int:
+        """Size of the embedding vector."""
+        ...
+
 
 class ZhaoVGGModel(EmbeddingsModelImplementation):
     """Original VGG model from the Zhao paper."""
+
+    def embedding_size(self) -> int:
+        return 4096
 
     def __init__(
         self,
@@ -102,7 +111,12 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
         self.model = model_vgg16.to(device)
 
         # Preprocessing steps
-        self._transform = torchvision.models.VGG16_Weights.IMAGENET1K_V1.transforms()
+        self._transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                torchvision.models.VGG16_Weights.IMAGENET1K_V1.transforms().to(device),
+            ]
+        )
 
     def transform(self, img: Tensor | Image) -> Tensor:
         """Preprocesses input, applying augmentations if in training mode."""
@@ -134,6 +148,96 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
                 x = model.classifier[i](x)
 
             return x.cpu().reshape(4096)
+
+
+class ResNetModel(EmbeddingsModelImplementation):
+    """Custom ResNet model for embedding extraction."""
+
+    def embedding_size(self) -> int:
+        return 2048
+
+    def __init__(
+        self,
+        class_count: int,
+        weights: Optional[Path] = None,
+        pretrained: bool = False,
+        device="cpu",
+    ):
+        """
+        Wraps the torch model.
+        :param class_count: Number of classes
+        :param weights: Path to weights file to load
+        :param pretrained: if weights are trained for transferware, or are general pretrained weights
+        :param device: Device to load on
+        """
+        super().__init__()
+
+        self.device = device
+        # Use torch weights if we are using a pretrained weights and passed none
+        model_resnet = torchvision.models.resnet50(
+            weights=(
+                torchvision.models.ResNet50_Weights.IMAGENET1K_V2
+                if pretrained and weights is None
+                else None
+            )
+        )
+
+        # Loading our trained model, so need to change shape
+        if not pretrained:
+            model_resnet.fc = torch.nn.Linear(2048, class_count)
+
+        # Load trained model if provided
+        if weights:
+            model_pth = torch.load(weights)
+            model_resnet.load_state_dict(model_pth)
+
+        # Add our class size
+        if pretrained:
+            model_resnet.fc = torch.nn.Linear(2048, class_count)
+
+        self.model = model_resnet.to(device)
+
+        # Returns the result of the last layer before the classifier
+        self._extractor = create_feature_extractor(
+            self.model, {"flatten": "flatten"}
+        ).to(device)
+
+        # Preprocessing steps
+        self._transform = transforms.Compose(
+            [
+                transforms.Resize((224, 224)),
+                torchvision.models.ResNet50_Weights.IMAGENET1K_V2.transforms().to(
+                    device
+                ),
+            ]
+        ).to(device)
+
+    def transform(self, img: Tensor | Image) -> Tensor:
+        """Preprocesses input, applying augmentations if in training mode."""
+        # First convert to tensor
+        match img:
+            case Image():
+                temp = transforms.ToTensor()(img)
+            case Tensor():
+                temp = img
+
+        # Next add augmentations
+        if self._augmentations and self._training:
+            temp = self._augmentations(temp)
+
+        # Finally norm
+        return self._transform(temp)
+
+    def get_embedding(self, image: Tensor) -> Tensor:
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        image = image.to(self.device).unsqueeze(0)  # Make into batch shape
+        with torch.no_grad():
+            model = self._extractor
+            model.eval()
+
+            embedding = model.forward(image)["flatten"][0]
+
+            return embedding.cpu()
 
 
 T = TypeVar("T", bound=EmbeddingsModelImplementation)
@@ -171,7 +275,7 @@ class ZhaoModel(Model):
         )
 
         logging.debug(f"Loading annoy index")
-        self.index = annoy.AnnoyIndex(4096, metric="euclidean")
+        self.index = annoy.AnnoyIndex(self.model.embedding_size(), metric="euclidean")
         self.index.load(str(idx_path))
 
     def query(self, image: Tensor | Image) -> list[ImageMatch]:
@@ -321,16 +425,17 @@ class ZhaoTrainer(Trainer):
                 global_step += 1
 
                 writer.add_scalar("train/loss", loss, global_step)
-
-                # Create PR curve
-                probs = torch.softmax(logits, dim=1)
-                one_hot_labels = torch.nn.functional.one_hot(
-                    y, num_classes=dataset.class_num()
-                )
-                writer.add_pr_curve("train/pr", one_hot_labels, probs, global_step)
-                writer.add_scalar(
-                    "train/map", map_metric(probs, one_hot_labels), global_step
-                )
+                writer.add_image("img", img_tensor=x[0], global_step=global_step)
+                with torch.no_grad():
+                    # Create PR curve
+                    probs = torch.softmax(logits, dim=1)
+                    one_hot_labels = torch.nn.functional.one_hot(
+                        y, num_classes=dataset.class_num()
+                    )
+                    writer.add_pr_curve("train/pr", one_hot_labels, probs, global_step)
+                    writer.add_scalar(
+                        "train/map", map_metric(probs, one_hot_labels), global_step
+                    )
 
             loss_sum = loss_sum / len(train_dataloader)
 
@@ -355,17 +460,20 @@ class ZhaoTrainer(Trainer):
 
                 writer.add_scalar("val/loss", loss, (epoch + 1) * step)
 
-                # Create PR curve
-                probs = torch.softmax(logits, dim=1)
-                one_hot_labels = torch.nn.functional.one_hot(
-                    y, num_classes=dataset.class_num()
-                )
-                writer.add_pr_curve("val/pr", one_hot_labels, probs, (epoch + 1) * step)
-                writer.add_scalar(
-                    "val/map",
-                    map_metric_eval(probs, one_hot_labels),
-                    (epoch + 1) * step,
-                )
+                with torch.no_grad():
+                    # Create PR curve
+                    probs = torch.softmax(logits, dim=1)
+                    one_hot_labels = torch.nn.functional.one_hot(
+                        y, num_classes=dataset.class_num()
+                    )
+                    writer.add_pr_curve(
+                        "val/pr", one_hot_labels, probs, (epoch + 1) * step
+                    )
+                    writer.add_scalar(
+                        "val/map",
+                        map_metric_eval(probs, one_hot_labels),
+                        (epoch + 1) * step,
+                    )
 
             loss_sum_eval = loss_sum_eval / len(test_dataloader)
 
@@ -442,7 +550,7 @@ class ZhaoTrainer(Trainer):
         """
         ds.set_transforms(model.transform)
 
-        index = annoy.AnnoyIndex(4096, metric="euclidean")
+        index = annoy.AnnoyIndex(model.embedding_size(), metric="euclidean")
         # Each index is the annoy id, each element is the matching tcc pattern id
         aid_to_tccid: list[int] = []
 
@@ -471,7 +579,7 @@ class ZhaoModelFactory(AbstractModelFactory):
     def __init__(self, resource_path: Path, device: str):
         super().__init__(resource_path)
         # Underlying torch class wrapper used, allows for swapping model backends
-        self._implementation_class = ZhaoVGGModel
+        self._implementation_class = ResNetModel
         self._device = device
 
     def get_model(self) -> ZhaoModel:
