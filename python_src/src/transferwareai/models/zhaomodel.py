@@ -370,7 +370,7 @@ class ZhaoTrainer(Trainer):
             batch_size=settings.training.batch_size,
             shuffle=False,
             num_workers=10,
-            pin_memory=True,
+            pin_memory=device != "cpu",
             pin_memory_device=device,
         )
         train_dataloader = DataLoader(
@@ -378,7 +378,7 @@ class ZhaoTrainer(Trainer):
             batch_size=settings.training.batch_size,
             shuffle=True,
             num_workers=10,
-            pin_memory=True,
+            pin_memory=device != "cpu",
             pin_memory_device=device,
         )
 
