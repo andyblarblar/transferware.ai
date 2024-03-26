@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from torch import Tensor
-from torch.utils.data import Dataset
 from dataclasses import dataclass
 
 from torchvision.datasets import ImageFolder
