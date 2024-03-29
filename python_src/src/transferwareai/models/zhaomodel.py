@@ -10,9 +10,10 @@ import torch
 import torchvision
 from torch import Tensor
 from torch.utils.data import DataLoader, RandomSampler
+from torchvision.datasets import ImageFolder
 from torchvision.transforms import v2 as transforms
 from torchvision.models.feature_extraction import create_feature_extractor
-from torchmetrics.classification import BinaryAveragePrecision
+from torchmetrics.classification import BinaryAveragePrecision, BinaryAccuracy
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
@@ -85,9 +86,9 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
 
         self.device = device
         # Use torch weights if we are using a pretrained weights and passed none
-        model_vgg16 = torchvision.models.vgg16(
+        model_vgg16 = torchvision.models.vgg16_bn(
             weights=(
-                torchvision.models.VGG16_Weights.IMAGENET1K_V1
+                torchvision.models.VGG16_BN_Weights.IMAGENET1K_V1
                 if pretrained and weights is None
                 else None
             )
@@ -102,10 +103,7 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
             model_vgg16_pth = torch.load(weights)
             model_vgg16.load_state_dict(model_vgg16_pth)
 
-        # The paper did this for the original data, so we shall too
         if pretrained:
-            model_vgg16.classifier[2] = torch.nn.Dropout(p=0.5)
-            model_vgg16.classifier[5] = torch.nn.Dropout(p=0.5)
             model_vgg16.classifier[6] = torch.nn.Linear(4096, class_count)
 
         self.model = model_vgg16.to(device)
@@ -113,8 +111,11 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
         # Preprocessing steps
         self._transform = transforms.Compose(
             [
+                transforms.Grayscale(3),
                 transforms.Resize((224, 224)),
-                torchvision.models.VGG16_Weights.IMAGENET1K_V1.transforms().to(device),
+                torchvision.models.VGG16_BN_Weights.IMAGENET1K_V1.transforms().to(
+                    device
+                ),
             ]
         )
 
@@ -205,8 +206,100 @@ class ResNetModel(EmbeddingsModelImplementation):
         # Preprocessing steps
         self._transform = transforms.Compose(
             [
+                transforms.Grayscale(3),
                 transforms.Resize((224, 224)),
                 torchvision.models.ResNet50_Weights.IMAGENET1K_V2.transforms().to(
+                    device
+                ),
+            ]
+        ).to(device)
+
+    def transform(self, img: Tensor | Image) -> Tensor:
+        """Preprocesses input, applying augmentations if in training mode."""
+        # First convert to tensor
+        match img:
+            case Image():
+                temp = transforms.ToTensor()(img)
+            case Tensor():
+                temp = img
+
+        # Next add augmentations
+        if self._augmentations and self._training:
+            temp = self._augmentations(temp)
+
+        # Finally norm
+        return self._transform(temp)
+
+    def get_embedding(self, image: Tensor) -> Tensor:
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        image = image.to(self.device).unsqueeze(0)  # Make into batch shape
+        with torch.no_grad():
+            model = self._extractor
+            model.eval()
+
+            embedding = model.forward(image)["flatten"][0]
+
+            return embedding.cpu()
+
+
+class SwinModel(EmbeddingsModelImplementation):
+    """Custom swin transformer model for embedding extraction."""
+
+    def embedding_size(self) -> int:
+        return 768
+
+    def __init__(
+        self,
+        class_count: int,
+        weights: Optional[Path] = None,
+        pretrained: bool = False,
+        device="cpu",
+    ):
+        """
+        Wraps the torch model.
+        :param class_count: Number of classes
+        :param weights: Path to weights file to load
+        :param pretrained: if weights are trained for transferware, or are general pretrained weights
+        :param device: Device to load on
+        """
+        super().__init__()
+
+        self.device = device
+        # Use torch weights if we are using a pretrained weights and passed none
+        model_swin = torchvision.models.swin_v2_t(
+            weights=(
+                torchvision.models.Swin_V2_T_Weights.IMAGENET1K_V1
+                if pretrained and weights is None
+                else None
+            )
+        )
+
+        # Loading our trained model, so need to change shape
+        if not pretrained:
+            model_swin.head = torch.nn.Linear(768, class_count)
+
+        # Load trained model if provided
+        if weights:
+            model_pth = torch.load(weights)
+            model_swin.load_state_dict(model_pth)
+
+        # Add our class size
+        if pretrained:
+            model_swin.head = torch.nn.Linear(768, class_count)
+
+        self.model = model_swin.to(device)
+
+        # Returns the result of the last layer before the classifier
+        self._extractor = create_feature_extractor(
+            self.model, {"flatten": "flatten"}
+        ).to(device)
+
+        # Preprocessing steps
+        self._transform = transforms.Compose(
+            [
+                transforms.Grayscale(3),
+                transforms.Resize((256, 256)),
+                torchvision.models.Swin_V2_T_Weights.IMAGENET1K_V1.transforms().to(
                     device
                 ),
             ]
@@ -398,13 +491,22 @@ class ZhaoTrainer(Trainer):
             loss_sum = 0
 
             model_wrapper.training_mode()
-            map_metric = BinaryAveragePrecision(thresholds=10).to(device)
+
             map_metric_eval = BinaryAveragePrecision(thresholds=10).to(device)
+            acc_eval = BinaryAccuracy(threshold=0.8).to(device)
+
+            cutmix = transforms.CutMix(num_classes=dataset.class_num())
+            mixup = transforms.MixUp(num_classes=dataset.class_num())
+            cutmix_or_mixup = transforms.RandomChoice([cutmix, mixup]).to(device)
+
             for step, (x, y) in tqdm(
                 enumerate(train_dataloader), total=len(train_dataloader)
             ):
                 # Migrating data to gpu
                 x, y = x.to(device), y.to(device)
+
+                # Slice and dice images together (making them multiclass)
+                x, y = cutmix_or_mixup(x, y)
 
                 # Turn on model training mode
                 model.train()
@@ -414,7 +516,6 @@ class ZhaoTrainer(Trainer):
                 loss = criteon.forward(logits, y)
                 # Recording total losses
                 loss_sum = loss_sum + loss.detach()
-                # print(loss)
                 # Optimizer gradient zeroed
                 optimizer.zero_grad()
                 # Back propagation of loss to obtain loss gradient
@@ -425,17 +526,6 @@ class ZhaoTrainer(Trainer):
                 global_step += 1
 
                 writer.add_scalar("train/loss", loss, global_step)
-                writer.add_image("img", img_tensor=x[0], global_step=global_step)
-                with torch.no_grad():
-                    # Create PR curve
-                    probs = torch.softmax(logits, dim=1)
-                    one_hot_labels = torch.nn.functional.one_hot(
-                        y, num_classes=dataset.class_num()
-                    )
-                    writer.add_pr_curve("train/pr", one_hot_labels, probs, global_step)
-                    writer.add_scalar(
-                        "train/map", map_metric(probs, one_hot_labels), global_step
-                    )
 
             loss_sum = loss_sum / len(train_dataloader)
 
@@ -474,6 +564,11 @@ class ZhaoTrainer(Trainer):
                         map_metric_eval(probs, one_hot_labels),
                         (epoch + 1) * step,
                     )
+
+                    acc_eval.update(probs, one_hot_labels)
+
+            eval_acc = acc_eval.compute()
+            writer.add_scalar("val/avg_accuracy", eval_acc, epoch)
 
             loss_sum_eval = loss_sum_eval / len(test_dataloader)
 
@@ -575,11 +670,22 @@ class ZhaoTrainer(Trainer):
         return index, aid_to_tccid
 
 
+class EmbeddingsValidator(GenericValidator):
+    """Simple wrapper around the generic validator that adds transforms from embedding models."""
+
+    def validate(
+        self, model: ZhaoModel, validation_set: ImageFolder
+    ) -> tuple[dict[int, float], float]:
+        validation_set.transform = model.model.transform
+
+        return super().validate(model, validation_set)
+
+
 class ZhaoModelFactory(AbstractModelFactory):
     def __init__(self, resource_path: Path, device: str):
         super().__init__(resource_path)
         # Underlying torch class wrapper used, allows for swapping model backends
-        self._implementation_class = ResNetModel
+        self._implementation_class = SwinModel
         self._device = device
 
     def get_model(self) -> ZhaoModel:
@@ -594,5 +700,5 @@ class ZhaoModelFactory(AbstractModelFactory):
             self._resource_path, self._implementation_class, self._device
         )
 
-    def get_validator(self) -> GenericValidator:
-        return GenericValidator(self._device)
+    def get_validator(self) -> EmbeddingsValidator:
+        return EmbeddingsValidator(self._device)
