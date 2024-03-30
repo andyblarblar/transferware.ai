@@ -23,8 +23,8 @@ class Model(ABC):
     """Interface for query models."""
 
     @abstractmethod
-    def query(self, image: Tensor) -> list[ImageMatch]:
-        """Takes the input image, and finds the 10 closest images from the dataset used for training."""
+    def query(self, image: Tensor, top_k: int = 10) -> list[ImageMatch]:
+        """Takes the input image, and finds the k closest images from the dataset used for training."""
         ...
 
     @abstractmethod

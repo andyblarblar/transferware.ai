@@ -333,6 +333,97 @@ class SwinModel(EmbeddingsModelImplementation):
             return embedding.cpu()
 
 
+class ConvnextModel(EmbeddingsModelImplementation):
+    """Custom ConvNeXt model for embedding extraction."""
+
+    def embedding_size(self) -> int:
+        return 768
+
+    def __init__(
+        self,
+        class_count: int,
+        weights: Optional[Path] = None,
+        pretrained: bool = False,
+        device="cpu",
+    ):
+        """
+        Wraps the torch model.
+        :param class_count: Number of classes
+        :param weights: Path to weights file to load
+        :param pretrained: if weights are trained for transferware, or are general pretrained weights
+        :param device: Device to load on
+        """
+        super().__init__()
+
+        self.device = device
+        # Use torch weights if we are using a pretrained weights and passed none
+        model_cnext = torchvision.models.convnext_tiny(
+            weights=(
+                torchvision.models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1
+                if pretrained and weights is None
+                else None
+            )
+        )
+
+        # Loading our trained model, so need to change shape
+        if not pretrained:
+            model_cnext.classifier[2] = torch.nn.Linear(768, class_count)
+
+        # Load trained model if provided
+        if weights:
+            model_pth = torch.load(weights)
+            model_cnext.load_state_dict(model_pth)
+
+        # Add our class size
+        if pretrained:
+            model_cnext.classifier[2] = torch.nn.Linear(768, class_count)
+
+        self.model = model_cnext.to(device)
+
+        # Returns the result of the last layer before the classifier
+        self._extractor = create_feature_extractor(
+            self.model, {"classifier.1": "flattened_feat"}
+        ).to(device)
+
+        # Preprocessing steps
+        self._transform = transforms.Compose(
+            [
+                transforms.Grayscale(3),
+                transforms.Resize((224, 224)),
+                torchvision.models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1.transforms().to(
+                    device
+                ),
+            ]
+        ).to(device)
+
+    def transform(self, img: Tensor | Image) -> Tensor:
+        """Preprocesses input, applying augmentations if in training mode."""
+        # First convert to tensor
+        match img:
+            case Image():
+                temp = transforms.ToTensor()(img)
+            case Tensor():
+                temp = img
+
+        # Next add augmentations
+        if self._augmentations and self._training:
+            temp = self._augmentations(temp)
+
+        # Finally norm
+        return self._transform(temp)
+
+    def get_embedding(self, image: Tensor) -> Tensor:
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        image = image.to(self.device).unsqueeze(0)  # Make into batch shape
+        with torch.no_grad():
+            model = self._extractor
+            model.eval()
+
+            embedding = model.forward(image)["flattened_feat"][0]
+
+            return embedding.cpu()
+
+
 T = TypeVar("T", bound=EmbeddingsModelImplementation)
 
 
@@ -371,7 +462,7 @@ class ZhaoModel(Model):
         self.index = annoy.AnnoyIndex(self.model.embedding_size(), metric="euclidean")
         self.index.load(str(idx_path))
 
-    def query(self, image: Tensor | Image) -> list[ImageMatch]:
+    def query(self, image: Tensor | Image, top_k: int = 10) -> list[ImageMatch]:
         with torch.no_grad():
             # Preprocess
             image = self.model.transform(image)
@@ -380,7 +471,7 @@ class ZhaoModel(Model):
             embedding = self.model.get_embedding(image)
 
             nns, dists = self.index.get_nns_by_vector(
-                embedding.cpu().detach(), 10, include_distances=True
+                embedding.cpu().detach(), top_k, include_distances=True
             )
             matches = [
                 ImageMatch(self.annoy_id_to_pattern_id[nn], dist)
@@ -666,7 +757,7 @@ class ZhaoTrainer(Trainer):
             if visitor:
                 visitor(embedding, img, i)
 
-        index.build(1000)
+        index.build(10000)
         return index, aid_to_tccid
 
 
@@ -685,7 +776,7 @@ class ZhaoModelFactory(AbstractModelFactory):
     def __init__(self, resource_path: Path, device: str):
         super().__init__(resource_path)
         # Underlying torch class wrapper used, allows for swapping model backends
-        self._implementation_class = SwinModel
+        self._implementation_class = ConvnextModel
         self._device = device
 
     def get_model(self) -> ZhaoModel:
