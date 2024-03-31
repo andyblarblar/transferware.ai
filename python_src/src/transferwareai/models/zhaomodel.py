@@ -525,6 +525,9 @@ class ZhaoTrainer(Trainer):
         )
         augmentations = transforms.Compose(
             [
+                transforms.ColorJitter(0.4, 0.4),
+                transforms.RandomPerspective(),
+                transforms.RandomResizedCrop((224, 224), scale=(0.05, 0.6)),
                 transforms.RandomRotation(110, fill=(255, 255, 255)),
             ]
         ).to(device)
