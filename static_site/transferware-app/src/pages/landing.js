@@ -7,20 +7,20 @@ import plate6 from "../assets/images/plate6.jpg";
 import plate7 from "../assets/images/plate7.jpg";
 import plate12 from "../assets/images/plate12.jpg";
 import plate13 from "../assets/images/plate13.jpg";
-
+import group3 from "../assets/images/Group-3.png";
 
 function Landing() {
     return (
       <div className="h-screen">
-        <div className="py-4 px-20">
-          <h1 className="text-2xl font-semibold">
+        <div className="py-4 px-20 h-[64px]">
+          <h1 className="sm:text-2xl font-semibold">
             Transferware.<span className="text-blue-500">ai</span>
           </h1>
         </div>
-        <div className="flex flex-row py-8 px-32 h-full">
-          <div className="header-column flex flex-col py-16">
-            <div className="header lg:w-3/4">
-              <h1 className="font-bold text-6xl my-6">
+        <div className="flex flex-col lg:flex-row">
+          <div className="header-column flex flex-col pb-0 pt-16 sm:py-16 px-20">
+            <div className="header lg:w-full">
+              <h1 className="font-bold sm:text-6xl my-6">
                 Upload your sherd, Find your pattern
               </h1>
               <p className="my-8 w-4/5">
@@ -32,33 +32,14 @@ function Landing() {
                 Use tool
               </button>
             </div>
-            <div className="flex-row space-x-20 my-20 font-semibold">
+            <div className="flex flex-row space-x-10 my-20 font-semibold">
               <span>Upload sherd</span>
               <span>view 10 closest matches</span>
               <span>get info from our database</span>
             </div>
           </div>
-          <div class="grid grid-cols-4 grid-rows-3 gap-4 bg-white text-gray-700 w-3/4 h-3/4">
-            <div
-              className="box col-span-2 row-span-1 bg-cover bg-center rounded-xl"
-              style={{ backgroundImage: `url(${plate1})` }}
-            ></div>
-            <div
-              class="box col-start-3 col-span-2 row-span-1 bg-cover bg-center rounded-xl"
-              style={{ backgroundImage: `url(${plate3})` }}
-            ></div>
-            <div
-              class="box col-start-1 row-start-2 row-span-1 bg-cover bg-center rounded-xl"
-              style={{ backgroundImage: `url(${plate13})` }}
-            ></div>
-            <div
-              class="box col-start-2 col-span-3 row-start-2 row-span-1 bg-cover bg-center rounded-xl"
-              style={{ backgroundImage: `url(${plate6})` }}
-            ></div>
-            <div
-              class="box col-span-4 row-start-3 row-span-1 bg-cover bg-center rounded-xl "
-              style={{ backgroundImage: `url(${plate11})` }}
-            ></div>
+          <div className="flex flex-col justify-end items-end w-full lg:h-[calc(100vh-64px)]">
+            <img src={group3} className="w-full" />
           </div>
         </div>
       </div>
