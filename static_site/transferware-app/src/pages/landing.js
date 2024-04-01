@@ -1,4 +1,13 @@
 import React from "react";
+import plate1 from "../assets/images/plate1.jpg"
+import plate3 from "../assets/images/plate3.jpg";
+import plate4 from "../assets/images/plate4.jpg";
+import plate11 from "../assets/images/plate11.jpg";
+import plate6 from "../assets/images/plate6.jpg";
+import plate7 from "../assets/images/plate7.jpg";
+import plate12 from "../assets/images/plate12.jpg";
+import plate13 from "../assets/images/plate13.jpg";
+
 
 function Landing() {
     return (
@@ -8,9 +17,9 @@ function Landing() {
             Transferware.<span className="text-blue-500">ai</span>
           </h1>
         </div>
-        <div className="flex-row p-6">
-          <div className="flex-col sm:px-20">
-            <div className="lg:w-2/5">
+        <div className="flex flex-row p-6">
+          <div className="header-column flex flex-col sm:px-20">
+            <div className="header lg:w-2/4">
               <h1 className="font-bold text-6xl my-6">
                 Upload your sherd, Find your pattern
               </h1>
@@ -29,8 +38,31 @@ function Landing() {
               <span>get info from our database</span>
             </div>
           </div>
+          <div class="grid grid-cols-4 grid-rows-3 gap-4 bg-white text-gray-700 w-1/2">
+            <div
+              className="box col-span-2 row-span-1 bg-cover bg-center rounded-xl"
+              style={{ backgroundImage: `url(${plate1})` }}
+            ></div>
+            <div
+              class="box col-start-3 col-span-2 row-span-1 bg-cover bg-center rounded-xl"
+              style={{ backgroundImage: `url(${plate3})` }}
+            ></div>
+            <div
+              class="box col-start-1 row-start-2 row-span-1 bg-cover bg-center rounded-xl"
+              style={{ backgroundImage: `url(${plate13})` }}
+            ></div>
+            <div
+              class="box col-start-2 col-span-3 row-start-2 row-span-1 bg-cover bg-center rounded-xl"
+              style={{ backgroundImage: `url(${plate6})` }}
+            ></div>
+            <div
+              class="box col-span-4 row-start-3 row-span-1 bg-cover bg-center rounded-xl "
+              style={{ backgroundImage: `url(${plate11})` }}
+            ></div>
+          </div>
         </div>
       </div>
     );
 }
+
 export default Landing;
