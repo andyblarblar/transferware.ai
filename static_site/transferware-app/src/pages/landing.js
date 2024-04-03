@@ -1,10 +1,8 @@
 import React from "react";
 import group3 from "../assets/images/Group-3.png";
-import upload from "../assets/images/upload-icon.png";
-import view from "../assets/images/view-icon.png";
-import database from "../assets/images/database-icon.png";
-
-
+import uploadIcon from "../assets/images/upload-icon.png";
+import viewIcon from "../assets/images/view-icon.png";
+import databaseIcon from "../assets/images/database-icon.png";
 
 
 function Landing() {
@@ -32,15 +30,15 @@ function Landing() {
             </div>
             <div className="flex flex-row space-x-5 sm:space-x-10 my-20 font-semibold text-xs px-8 sm:px-0">
               <span className="flex flex-row items-center">
-                <img src={upload} className="h-[20px] px-5" />
+                <img src={uploadIcon} className="h-[20px] px-5" />
                 Upload sherd
               </span>
               <span className="flex flex-row items-center">
-                <img src={view} className="h-[20px] px-5" />
+                <img src={viewIcon} className="h-[20px] px-5" />
                 view 10 closest matches
               </span>
               <span className="flex flex-row items-center">
-                <img src={database} className="h-[20px] px-5" />
+                <img src={databaseIcon} className="h-[20px] px-5" />
                 get info from our database
               </span>
             </div>
