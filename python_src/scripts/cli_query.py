@@ -107,15 +107,18 @@ if __name__ == "__main__":
         files = os.listdir(d)
 
         for file in files:
-            close_images.append(
-                F.resize(
-                    torchvision.io.read_image(
-                        str(d.joinpath(file)),
-                        torchvision.io.ImageReadMode.RGB,
-                    ),
-                    size=[500, 500],
+            try:
+                close_images.append(
+                    F.resize(
+                        torchvision.io.read_image(
+                            str(d.joinpath(file)),
+                            torchvision.io.ImageReadMode.RGB,
+                        ),
+                        size=[500, 500],
+                    )
                 )
-            )
+            except RuntimeError as e:
+                logging.error(f"Error reading files: {e}")
 
     grid = torchvision.utils.make_grid(close_images)
     plt.imshow(grid.permute(1, 2, 0))
