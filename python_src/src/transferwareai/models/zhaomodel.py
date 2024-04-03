@@ -674,7 +674,7 @@ class ZhaoTrainer(Trainer):
             if loss_sum_eval < best_val_loss:
                 logging.debug("Saving best model")
                 torch.save(
-                    model.state_dict(),
+                    model.to("cpu").state_dict(),
                     self._outer_dataset.joinpath("zhao_train_best.pth"),
                 )
                 best_val_loss = loss_sum_eval
