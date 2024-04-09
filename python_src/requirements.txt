@@ -3,6 +3,7 @@ torchvision
 scikit-learn
 torchmetrics
 annoy
+matplotlib
 
 tqdm
 black[d]

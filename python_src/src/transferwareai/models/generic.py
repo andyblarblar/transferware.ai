@@ -3,6 +3,9 @@ from torchvision.datasets import ImageFolder
 
 from collections import defaultdict
 import logging
+
+from tqdm import tqdm
+
 from .adt import Validator, Model
 
 
@@ -20,10 +23,10 @@ class GenericValidator(Validator):
         num_correct = 0
         class_val = defaultdict(list)
 
-        dl = DataLoader(validation_set, shuffle=False, batch_size=1)
+        dl = DataLoader(validation_set, shuffle=False, batch_size=1, num_workers=5)
         idx_to_class = {j: i for (i, j) in validation_set.class_to_idx.items()}
 
-        for img, id in dl:
+        for img, id in tqdm(dl):
             img = img.to(self.device)
 
             matches = model.query(img[0])
