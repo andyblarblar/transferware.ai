@@ -127,6 +127,10 @@ class ZhaoVGGModel(EmbeddingsModelImplementation):
                 temp = transforms.ToTensor()(img)
             case Tensor():
                 temp = img
+            case _:
+                raise ValueError("Can only query tensor or image!")
+
+        temp = temp.to(self.device)
 
         # Next add augmentations
         if self._augmentations and self._training:
@@ -222,6 +226,10 @@ class ResNetModel(EmbeddingsModelImplementation):
                 temp = transforms.ToTensor()(img)
             case Tensor():
                 temp = img
+            case _:
+                raise ValueError("Can only query tensor or image!")
+
+        temp = temp.to(self.device)
 
         # Next add augmentations
         if self._augmentations and self._training:
@@ -313,6 +321,10 @@ class SwinModel(EmbeddingsModelImplementation):
                 temp = transforms.ToTensor()(img)
             case Tensor():
                 temp = img
+            case _:
+                raise ValueError("Can only query tensor or image!")
+
+        temp = temp.to(self.device)
 
         # Next add augmentations
         if self._augmentations and self._training:
@@ -404,7 +416,10 @@ class ConvnextModel(EmbeddingsModelImplementation):
                 temp = transforms.ToTensor()(img)
             case Tensor():
                 temp = img
+            case _:
+                raise ValueError("Can only query tensor or image!")
 
+        temp = temp.to(self.device)
         # Next add augmentations
         if self._augmentations and self._training:
             temp = self._augmentations(temp)
