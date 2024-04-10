@@ -3,7 +3,8 @@ import logging
 import warnings
 
 import uvicorn
-from transferwareai.modelapi.query import app
+
+from transferwareai.config import settings
 
 # Set loggers to not spam
 warnings.filterwarnings("ignore", ".*Tensor.*")
@@ -15,4 +16,9 @@ logging.getLogger("multipart").setLevel(logging.WARN)
 logging.getLogger().setLevel(logging.DEBUG)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)  # TODO make these configurable
+    uvicorn.run(
+        "transferwareai.modelapi.query:app",
+        host=settings.query.host,
+        port=settings.query.port,
+        workers=settings.query.workers,
+    )
