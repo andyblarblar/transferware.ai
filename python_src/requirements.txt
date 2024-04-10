@@ -5,6 +5,10 @@ torchmetrics
 annoy
 matplotlib
 
+fastapi
+uvicorn
+python-multipart
+
 tqdm
 black[d]
 dynaconf

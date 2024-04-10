@@ -140,97 +140,92 @@ class ApiCache:
         _cache_file = directory.joinpath("cache.json")
         _assets_dir = directory.joinpath("assets")  # directory for images
 
-        with asyncio.Runner() as runner:
-            if not no_update and ApiCache._requires_update(_cache_file):
-                logging.info("Cache out of date, updating cache")
+        if not no_update and ApiCache._requires_update(_cache_file):
+            logging.info("Cache out of date, updating cache")
 
-                # Get patterns JSON
-                patterns = runner.run(ApiCache.get_api_pages_async())
+            # Get patterns JSON
+            patterns = asyncio.run(ApiCache.get_api_pages_async())
 
-                if not _directory.exists():
-                    os.makedirs(_directory)
+            if not _directory.exists():
+                os.makedirs(_directory)
 
-                # Write cache to disk
-                with open(_cache_file, "w") as buffer:
-                    buffer.write(json.dumps(patterns, indent=2))
+            # Write cache to disk
+            with open(_cache_file, "w") as buffer:
+                buffer.write(json.dumps(patterns, indent=2))
 
-            df = pl.read_json(_cache_file)
+        df = pl.read_json(_cache_file)
 
-            logging.info(f"Loaded cache with {len(df)} patterns")
+        logging.info(f"Loaded cache with {len(df)} patterns")
 
-            # Early return if not updating
-            if no_update:
-                return ApiCache(directory, df)
+        # Early return if not updating
+        if no_update:
+            return ApiCache(directory, df)
 
-            # Begin collecting assets
-            if not _assets_dir.exists():
-                os.makedirs(_assets_dir)  # create assets directory
+        # Begin collecting assets
+        if not _assets_dir.exists():
+            os.makedirs(_assets_dir)  # create assets directory
 
-            # Query for pattern ids + image URLs and tags
-            urls = df.select(
-                pl.col("id"),
-                pl.col("images").list.eval(pl.element().struct.field("url")),
-                pl.col("images")
-                .list.eval(pl.element().struct.field("tags"))
-                .alias("tags"),
-            ).drop_nulls()
+        # Query for pattern ids + image URLs and tags
+        urls = df.select(
+            pl.col("id"),
+            pl.col("images").list.eval(pl.element().struct.field("url")),
+            pl.col("images").list.eval(pl.element().struct.field("tags")).alias("tags"),
+        ).drop_nulls()
 
-            # We use asyncio for downloading to avoid it taking like years
-            async def get_images_for_pattern(
-                pattern_id, image_urls, tags, pattern_dir, session
-            ):
-                """Download images for a pattern and write them to disk."""
-                logging.debug(f"Downloading images for {pattern_id}")
-                # Download all images for pattern
-                for image_url, tag in zip(image_urls, tags):
-                    # Make path safe
-                    tag = tag.replace("/", "_")
+        # We use asyncio for downloading to avoid it taking like years
+        async def get_images_for_pattern(
+            pattern_id, image_urls, tags, pattern_dir, session
+        ):
+            """Download images for a pattern and write them to disk."""
+            logging.debug(f"Downloading images for {pattern_id}")
+            # Download all images for pattern
+            for image_url, tag in zip(image_urls, tags):
+                # Make path safe
+                tag = tag.replace("/", "_")
 
-                    if not pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg").exists():
-                        complete = False
-                        while not complete:
-                            try:
-                                async with session.get(image_url) as image_response:
-                                    image_file = pattern_dir.joinpath(
-                                        f"{pattern_id}-{tag}.jpg"
-                                    )
-                                    async with async_open(image_file, "wb") as f:
-                                        await f.write(
-                                            await image_response.content.read()
-                                        )
-                                complete = True
-                            except aiohttp.ServerDisconnectedError as e:
-                                logging.debug("Server disconnect! Reattempting")
-
-            async def get_images():
-                # Share a single connection pool
-                async with aiohttp.ClientSession(
-                    connector=aiohttp.TCPConnector(limit=200)
-                ) as session:
-                    tasks = []
-                    # Create download image tasks, lazy
-                    for row in urls.iter_rows():
-                        pattern_id, image_urls, tags = row
-
-                        # Create patterns directory if new
-                        pattern_dir = _assets_dir.joinpath(str(pattern_id))
-                        if not pattern_dir.exists():
-                            os.makedirs(pattern_dir)
-
-                        tasks.append(
-                            asyncio.create_task(
-                                get_images_for_pattern(
-                                    pattern_id, image_urls, tags, pattern_dir, session
+                if not pattern_dir.joinpath(f"{pattern_id}-{tag}.jpg").exists():
+                    complete = False
+                    while not complete:
+                        try:
+                            async with session.get(image_url) as image_response:
+                                image_file = pattern_dir.joinpath(
+                                    f"{pattern_id}-{tag}.jpg"
                                 )
+                                async with async_open(image_file, "wb") as f:
+                                    await f.write(await image_response.content.read())
+                            complete = True
+                        except aiohttp.ServerDisconnectedError as e:
+                            logging.debug("Server disconnect! Reattempting")
+
+        async def get_images():
+            # Share a single connection pool
+            async with aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(limit=200)
+            ) as session:
+                tasks = []
+                # Create download image tasks, lazy
+                for row in urls.iter_rows():
+                    pattern_id, image_urls, tags = row
+
+                    # Create patterns directory if new
+                    pattern_dir = _assets_dir.joinpath(str(pattern_id))
+                    if not pattern_dir.exists():
+                        os.makedirs(pattern_dir)
+
+                    tasks.append(
+                        asyncio.create_task(
+                            get_images_for_pattern(
+                                pattern_id, image_urls, tags, pattern_dir, session
                             )
                         )
-                    # Download each pattern in parallel, and each image per pattern in series
-                    await asyncio.gather(*tasks)
+                    )
+                # Download each pattern in parallel, and each image per pattern in series
+                await asyncio.gather(*tasks)
 
-            # Actually run the image get tasks
-            runner.run(get_images())
+        # Actually run the image get tasks
+        asyncio.run(get_images())
 
-            return ApiCache(directory, df)
+        return ApiCache(directory, df)
 
     def as_df(self) -> DataFrame:
         return self._df
@@ -245,3 +240,13 @@ class ApiCache:
         return self.get_image_path_for_id(pattern_id).joinpath(
             f"{pattern_id}-{tag}.jpg"
         )
+
+    def get_name_for_pattern_id(self, pattern_id: int) -> str:
+        return self._df.select(pl.col("name").where(pl.col("id") == pattern_id))[
+            "name"
+        ][0]
+
+    def get_tcc_url_for_pattern_id(self, pattern_id: int) -> str:
+        return self._df.select(pl.col("url").where(pl.col("id") == pattern_id))["url"][
+            0
+        ]
