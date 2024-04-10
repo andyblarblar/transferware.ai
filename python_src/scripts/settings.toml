@@ -26,3 +26,12 @@ validation_threshold = 0.7 # TODO change for prod
 torch_device = "cuda"
 # The directory the cache and model resources will be read from, and written to on update
 resource_dir = "./" # TODO change for prod
+# Number of results to get from the model
+top_k = 10
+# Server settings
+host = "0.0.0.0"
+port = 8080
+# Number of server processes to spawn. Each will load the model, so watch VRAM. Allows for horizontal scaling.
+workers = 1
+# IDs to skip when training the model. Use when training errors due to corrupted image files.
+skip_ids = [67001]
