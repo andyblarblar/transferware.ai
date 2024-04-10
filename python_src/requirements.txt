@@ -4,6 +4,7 @@ scikit-learn
 torchmetrics
 annoy
 matplotlib
+nest-asyncio
 
 fastapi
 uvicorn

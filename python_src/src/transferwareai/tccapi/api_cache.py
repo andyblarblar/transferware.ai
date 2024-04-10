@@ -14,6 +14,10 @@ import asyncio
 import aiohttp
 from aiofile import async_open
 
+import nest_asyncio
+
+nest_asyncio.apply()
+
 
 class ApiCache:
     """Class to manage API cache"""
@@ -140,11 +144,13 @@ class ApiCache:
         _cache_file = directory.joinpath("cache.json")
         _assets_dir = directory.joinpath("assets")  # directory for images
 
+        runner = asyncio.get_event_loop()
+
         if not no_update and ApiCache._requires_update(_cache_file):
             logging.info("Cache out of date, updating cache")
 
             # Get patterns JSON
-            patterns = asyncio.run(ApiCache.get_api_pages_async())
+            patterns = runner.run_until_complete(ApiCache.get_api_pages_async())
 
             if not _directory.exists():
                 os.makedirs(_directory)
@@ -223,7 +229,7 @@ class ApiCache:
                 await asyncio.gather(*tasks)
 
         # Actually run the image get tasks
-        asyncio.run(get_images())
+        runner.run_until_complete(get_images())
 
         return ApiCache(directory, df)
 

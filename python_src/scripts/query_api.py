@@ -21,4 +21,5 @@ if __name__ == "__main__":
         host=settings.query.host,
         port=settings.query.port,
         workers=settings.query.workers,
+        loop="asyncio",
     )
