@@ -26,3 +26,5 @@ validation_threshold = 0.7 # TODO change for prod
 torch_device = "cuda"
 # The directory the cache and model resources will be read from, and written to on update
 resource_dir = "./" # TODO change for prod
+# Number of results to get from the model
+top_k = 10

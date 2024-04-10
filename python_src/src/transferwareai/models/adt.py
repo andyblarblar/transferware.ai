@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from pydantic import BaseModel
 from torch import Tensor
 from dataclasses import dataclass
 
@@ -9,8 +10,7 @@ from torchvision.datasets import ImageFolder
 from ..data.dataset import CacheDataset
 
 
-@dataclass
-class ImageMatch:
+class ImageMatch(BaseModel):
     """An image matching to the query image/"""
 
     id: int

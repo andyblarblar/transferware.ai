@@ -1,28 +1,37 @@
-from fastapi import FastAPI, File, UploadFile
-from ..models.zhaomodel import ZhaoModel
-from torch import Tensor
+from typing import Annotated
+
+import torchvision
+from fastapi import FastAPI, File, HTTPException, Depends
+import torch
+
+from transferwareai.config import settings
+from transferwareai.modelapi.model import initialize_model, get_model
+from transferwareai.models.adt import ImageMatch, Model
 
 app = FastAPI()
 
-@app.post("/query")
-async def query_model(search_request: UploadFile = File(...)):
-    """Send an image to the model, and get the 10 closest images back.
-    \nSample usage (Python and HTML):\n
-    requests.post(url=f"{url}/query", files={"search_request": open(image_name, "rb")})
-    \n\nOR\n\n
-    <body>\n
-    <form action='/query' enctype='multipart/form-data' method='post'>\n
-    <input name='file' type='file'>\n
-    <input type='submit'>\n
-    </form>\n
-    </body>
-    \nTODO: Implement this function"""
-    
-    # Load the image (try...except...finally block)
-    #   - Save the image to a temporary file
-    #   - Load the image from the temporary file
-    # Convert the image to a tensor
-    # Load the model
-    # Query the model
-    # Return the result in a format that can be easily displayed in the frontend.
-    pass
+
+@app.on_event("startup")
+def startup():
+    initialize_model()
+
+
+@app.post("/query", response_model=list[ImageMatch])
+async def query_model(
+    file: Annotated[bytes, File()], model: Annotated[Model, Depends(get_model)]
+):
+    """Send an image to the model, and get the 10 closest images back."""
+
+    # Parse image into tensor
+    try:
+        raw_tensor = torch.frombuffer(file, dtype=torch.uint8)
+        img = torchvision.io.decode_image(raw_tensor, torchvision.io.ImageReadMode.RGB)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail="Only jpg or png files are supported"
+        )
+
+    # Query model
+    top_matches = model.query(img, top_k=settings.query.top_k)
+
+    return top_matches

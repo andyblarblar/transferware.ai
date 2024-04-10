@@ -489,7 +489,7 @@ class ZhaoModel(Model):
                 embedding.cpu().detach(), top_k, include_distances=True
             )
             matches = [
-                ImageMatch(self.annoy_id_to_pattern_id[nn], dist)
+                ImageMatch(id=self.annoy_id_to_pattern_id[nn], confidence=dist)
                 for nn, dist in zip(nns, dists)
             ]
 
