@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef} from "react";
 import photoIcon from "../assets/images/photo-icon.png";
 import cross from "../assets/images/Cross.png";
 
@@ -7,24 +7,25 @@ function UploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // State to store image URL
-  const [fileSize, setFileSize] = useState(""); // State to store image file size
+  const [imageUrl, setImageUrl] = useState("");
+  const [fileSize, setFileSize] = useState("");
+  const fileInputRef = useRef(null); // Added useRef to create a reference to the file input
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file && (file.type === "image/png" || file.type === "image/jpeg")) {
       setSelectedFile(file);
       setErrorMessage("");
-      setUploadedFileName(file.name); // Set uploaded file name
+      setUploadedFileName(file.name);
 
       // Calculate file size in kilobytes
-      const fileSizeInKB = Math.round((file.size / 1024) * 100) / 100; // Round to two decimal places
+      const fileSizeInKB = Math.round((file.size / 1024) * 100) / 100;
       setFileSize(fileSizeInKB + " KB");
     } else {
       setSelectedFile(null);
       setUploadedFileName(""); // Clear uploaded file name
       setFileSize(""); // Clear file size
-      setErrorMessage("Please select a valid PNG or JPG file."); // Set error message
+      setErrorMessage("Please select a valid PNG or JPG file.");
     }
   };
 
@@ -33,7 +34,6 @@ function UploadPage() {
   };
 
   const handleImportFromUrl = () => {
-    // Check if imageUrl is not empty
     if (imageUrl.trim() !== "") {
       // Create a new Image object
       const img = new Image();
@@ -43,7 +43,7 @@ function UploadPage() {
       img.onload = () => {
         setSelectedFile(null);
         setErrorMessage("");
-        setUploadedFileName(""); // Clear uploaded file name
+        setUploadedFileName("");
         setErrorMessage("");
 
         // Extract filename from URL and remove query parameters
@@ -55,12 +55,11 @@ function UploadPage() {
 
         // Update the UI to display the filename
         setImageUrl("");
-        setUploadedFileName(filename); // Set filename as the uploaded file name
+        setUploadedFileName(filename);
       };
 
-      // If there's an error loading the image
+      // Error message if loading fails
       img.onerror = () => {
-        // Display an error message
         setErrorMessage("Error: Unable to load image from URL.");
       };
     } else {
@@ -69,6 +68,12 @@ function UploadPage() {
     }
   };
 
+  const handleCancel = () => {
+    setSelectedFile(null);
+    setUploadedFileName("");
+    setFileSize("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   return (
     <div className="flex flex-col items-center h-screen py-20">
@@ -87,6 +92,7 @@ function UploadPage() {
             browse
           </label>
           <input
+            ref={fileInputRef}
             id="fileInput"
             type="file"
             accept=".png,.jpg,.jpeg"
@@ -114,13 +120,13 @@ function UploadPage() {
           />
           <button
             onClick={handleImportFromUrl}
-            className="bg-blue-400 text-white px-4 py-2 rounded-md"
+            className="bg-gray-950 text-white px-4 py-2 rounded-md"
           >
             Import
           </button>
         </div>
-        
-        {/* uploaded file name display */}
+
+        {/* uploaded file name & size display */}
         <div className="p-4 rounded-md">
           <div className={`w-full rounded-md ${!uploadedFileName && "hidden"}`}>
             {uploadedFileName && (
@@ -135,7 +141,26 @@ function UploadPage() {
           </div>
         </div>
 
-
+        <div className="flex justify-center space-x-4">
+          <button
+            className={`border-2 border-black text-black px-4 py-2 rounded-md ${
+              selectedFile ? "" : "opacity-30 cursor-not-allowed"
+            }`}
+            disabled={!selectedFile}
+            onClick={handleCancel}
+          >
+            Cancel
+          </button>
+          <button
+            className={`bg-blue-400  text-black px-4 py-2 rounded-md ${
+              selectedFile ? "" : "opacity-70 cursor-not-allowed"
+            }`}
+            disabled={!selectedFile}
+          >
+            Submit
+          </button>
+        </div>
+        
       </div>
     </div>
   );
