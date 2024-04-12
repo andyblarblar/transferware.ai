@@ -75,6 +75,26 @@ function UploadPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleSubmit = async () => {
+    if (selectedFile) {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      try {
+        const response = await fetch("http://0.0.0.0:8080/query", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+        console.log("Query results:", data);
+      } catch (error) {
+        console.error("Error submitting file:", error);
+        setErrorMessage("Failed to submit the file.");
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col items-center h-screen py-20">
       <h1 className="w-full py-10 text-center font-semibold text-xl">
@@ -156,11 +176,11 @@ function UploadPage() {
               selectedFile ? "" : "opacity-70 cursor-not-allowed"
             }`}
             disabled={!selectedFile}
+            onClick={handleSubmit}
           >
             Submit
           </button>
         </div>
-        
       </div>
     </div>
   );
