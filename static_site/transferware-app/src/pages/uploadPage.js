@@ -1,7 +1,8 @@
 import React, { useState, useRef} from "react";
+import { useNavigate } from 'react-router-dom'; 
 import photoIcon from "../assets/images/photo-icon.png";
 import cross from "../assets/images/Cross.png";
-
+import { useData } from "../DataContext";
 
 function UploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -10,6 +11,8 @@ function UploadPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [fileSize, setFileSize] = useState("");
   const fileInputRef = useRef(null); // Added useRef to create a reference to the file input
+  const { setData } = useData();
+  const navigate = useNavigate(); 
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -81,19 +84,44 @@ function UploadPage() {
       formData.append("file", selectedFile);
 
       try {
+        // Post the file to the query endpoint
         const response = await fetch("http://0.0.0.0:8080/query", {
           method: "POST",
           body: formData,
         });
 
-        const data = await response.json();
-        console.log("Query results:", data);
+        // Parse the JSON response
+        const queryResults = await response.json();
+
+        // Create a list of fetch promises for each pattern id
+        const patternFetchPromises = queryResults.map(async (result) => {
+          const patternResponse = await fetch(
+            `http://0.0.0.0:8080/pattern/${result.id}`
+          );
+          const patternData = await patternResponse.json();
+          return {
+            id: result.id,
+            confidence: result.confidence,
+            pattern_name: patternData.pattern_name,
+            tcc_url: patternData.tcc_url,
+          };
+        });
+
+        // Wait for all fetch calls to resolve
+        const combinedResults = await Promise.all(patternFetchPromises);
+
+        // Set the data in context
+        setData(combinedResults);
+
+        // Navigate to the next page
+        navigate("/viewMatches");
       } catch (error) {
-        console.error("Error submitting file:", error);
+        console.error("Error fetching data:", error);
         setErrorMessage("Failed to submit the file.");
       }
     }
   };
+
 
   return (
     <div className="flex flex-col items-center h-screen py-20">
