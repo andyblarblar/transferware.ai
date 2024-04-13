@@ -15,15 +15,15 @@ const MatchResults = () => {
             alt="Pattern-img"
             className="w-1/2 lg:w-2/5 h-auto mb-2"
           />
-          <p>
+          <p className="mb-4">
             <span className="font-semibold">Pattern name:</span>{" "}
             {item.pattern_name}
           </p>
-          <p>
+          <p className="mb-4">
             <span className="font-semibold">Confidence:</span>{" "}
             {item.confidence.toFixed(4)}%
           </p>
-          <p className="break-words break-all">
+          <p className="break-words break-all mb-2">
             <span className="font-semibold">Pattern URL: </span>
             <a
               className="text-blue-600"
