@@ -36,40 +36,37 @@ function UploadPage() {
     setImageUrl(e.target.value);
   };
 
-  const handleImportFromUrl = () => {
-    if (imageUrl.trim() !== "") {
-      // Create a new Image object
-      const img = new Image();
-      img.src = imageUrl;
+  const handleImportFromUrl = async () => {
+  if (imageUrl.trim() !== "") {
+    try {
+      // Fetch the image from the URL as a Blob
+      const response = await fetch(imageUrl);
+      const imageBlob = await response.blob();
 
-      // Once the image is loaded, update the UI with the image
-      img.onload = () => {
-        setSelectedFile(null);
-        setErrorMessage("");
-        setUploadedFileName("");
-        setErrorMessage("");
+      // Create a filename from URL
+      let filename = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
+      const queryIndex = filename.indexOf("?");
+      if (queryIndex !== -1) {
+        filename = filename.substring(0, queryIndex);
+      }
 
-        // Extract filename from URL and remove query parameters
-        let filename = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
-        const queryIndex = filename.indexOf("?");
-        if (queryIndex !== -1) {
-          filename = filename.substring(0, queryIndex);
-        }
+      // Create a File object from the Blob
+      const imageFile = new File([imageBlob], filename, { type: imageBlob.type });
 
-        // Update the UI to display the filename
-        setImageUrl("");
-        setUploadedFileName(filename);
-      };
-
-      // Error message if loading fails
-      img.onerror = () => {
-        setErrorMessage("Error: Unable to load image from URL.");
-      };
-    } else {
-      // If the URL is empty, display an error message
-      setErrorMessage("Please enter a valid image URL.");
+      setSelectedFile(imageFile);
+      setUploadedFileName(filename);
+      setFileSize((imageBlob.size / 1024).toFixed(2) + " KB");
+      setErrorMessage("");
+      setImageUrl("");
+    } catch (error) {
+      console.error('Error loading image:', error);
+      setErrorMessage("Error: Unable to load image from URL.");
     }
-  };
+  } else {
+    setErrorMessage("Please enter a valid image URL.");
+  }
+};
+
 
   const handleCancel = () => {
     setSelectedFile(null);
