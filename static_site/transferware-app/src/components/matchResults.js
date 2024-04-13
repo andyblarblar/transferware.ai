@@ -21,7 +21,7 @@ const MatchResults = () => {
           </p>
           <p className="mb-4">
             <span className="font-semibold">Confidence:</span>{" "}
-            {item.confidence.toFixed(4)}%
+            {item.confidence.toFixed(3)}%
           </p>
           <p className="break-words break-all mb-2">
             <span className="font-semibold">Pattern URL: </span>
