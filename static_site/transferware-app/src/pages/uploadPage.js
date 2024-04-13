@@ -78,49 +78,71 @@ function UploadPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmit = async () => {
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+const handleSubmit = async () => {
+  if (selectedFile) {
+    const formData = new FormData();
+    formData.append("file", selectedFile);
 
-      try {
-        // Post the file to the query endpoint
-        const response = await fetch("http://0.0.0.0:8080/query", {
-          method: "POST",
-          body: formData,
-        });
+    try {
+      // Post the file to the query endpoint
+      const response = await fetch("http://0.0.0.0:8080/query", {
+        method: "POST",
+        body: formData,
+      });
 
-        // Parse the JSON response
-        const queryResults = await response.json();
+      // Parse the JSON response
+      const queryResults = await response.json();
 
-        // Create a list of fetch promises for each pattern id
-        const patternFetchPromises = queryResults.map(async (result) => {
-          const patternResponse = await fetch(
-            `http://0.0.0.0:8080/pattern/${result.id}`
+      // Create a list of fetch promises for each pattern id
+      const patternFetchPromises = queryResults.map(async (result) => {
+        const patternResponse = await fetch(
+          `http://0.0.0.0:8080/pattern/${result.id}`
+        );
+        const patternData = await patternResponse.json();
+        return {
+          id: result.id,
+          confidence: result.confidence,
+          pattern_name: patternData.pattern_name,
+          tcc_url: patternData.tcc_url,
+        };
+      });
+
+      // Wait for all fetch calls to resolve
+      const combinedResults = await Promise.all(patternFetchPromises);
+
+      // Fetch images for each pattern with fallback for errors
+      const patternImagePromises = combinedResults.map(async (pattern) => {
+        try {
+          const imageUrlResponse = await fetch(
+            `http://0.0.0.0:8080/pattern/image/${pattern.id}`
           );
-          const patternData = await patternResponse.json();
+          if (!imageUrlResponse.ok) throw new Error("Failed to load image");
+          const imageUrl = await imageUrlResponse.url; // Assuming the URL itself is what you need
           return {
-            id: result.id,
-            confidence: result.confidence,
-            pattern_name: patternData.pattern_name,
-            tcc_url: patternData.tcc_url,
+            ...pattern,
+            imageUrl: imageUrl,
           };
-        });
+        } catch {
+          // Fallback image path if the fetch fails or response is not OK
+          return {
+            ...pattern,
+            imageUrl:
+              "https://cdn.vectorstock.com/i/500p/36/49/no-image-symbol-missing-available-icon-gallery-vector-43193649.jpg",
+          };
+        }
+      });
 
-        // Wait for all fetch calls to resolve
-        const combinedResults = await Promise.all(patternFetchPromises);
+      const finalResults = await Promise.all(patternImagePromises);
+      setData(finalResults);
 
-        // Set the data in context
-        setData(combinedResults);
-
-        // Navigate to the next page
-        navigate("/viewMatches");
-      } catch (error) {
-        console.error("Error fetching data:", error);
-        setErrorMessage("Failed to submit the file.");
-      }
+      // Navigate to the next page
+      navigate("/viewMatches");
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      setErrorMessage("Failed to submit the file.");
     }
-  };
+  }
+};
 
 
   return (
