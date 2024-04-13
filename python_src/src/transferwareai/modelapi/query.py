@@ -21,12 +21,9 @@ from fastapi.responses import FileResponse
 app = FastAPI()
 
 # Configure CORS
-origins = [
-    "http://localhost:3000",  # Add other origins here if needed
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.query.origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
