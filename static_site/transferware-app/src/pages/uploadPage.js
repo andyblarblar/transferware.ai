@@ -12,7 +12,10 @@ function UploadPage() {
   const [fileSize, setFileSize] = useState("");
   const fileInputRef = useRef(null); // Added useRef to create a reference to the file input
   const { setData } = useData();
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
+
+  // Base url for the query api
+  const base_url = process.env.REACT_APP_QUERY_BASE;
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -85,7 +88,7 @@ const handleSubmit = async () => {
 
     try {
       // Post the file to the query endpoint
-      const response = await fetch("http://0.0.0.0:8080/query", {
+      const response = await fetch(`${base_url}/query`, {
         method: "POST",
         body: formData,
       });
@@ -96,7 +99,7 @@ const handleSubmit = async () => {
       // Create a list of fetch promises for each pattern id
       const patternFetchPromises = queryResults.map(async (result) => {
         const patternResponse = await fetch(
-          `http://0.0.0.0:8080/pattern/${result.id}`
+          `${base_url}/pattern/${result.id}`
         );
         const patternData = await patternResponse.json();
         return {
@@ -114,7 +117,7 @@ const handleSubmit = async () => {
       const patternImagePromises = combinedResults.map(async (pattern) => {
         try {
           const imageUrlResponse = await fetch(
-            `http://0.0.0.0:8080/pattern/image/${pattern.id}`
+            `${base_url}/pattern/image/${pattern.id}`
           );
           if (!imageUrlResponse.ok) throw new Error("Failed to load image");
           const imageUrl = await imageUrlResponse.url; // Assuming the URL itself is what you need
