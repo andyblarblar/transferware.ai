@@ -3,7 +3,7 @@ import MatchResults from "../components/matchResults";
 
 function ViewMatches() {
   return (
-    <div>
+    <div className="p-0 sm:p-12 flex justify-center">
         <MatchResults/>
     </div>
     
