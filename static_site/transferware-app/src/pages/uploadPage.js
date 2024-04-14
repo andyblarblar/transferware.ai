@@ -179,7 +179,7 @@ function UploadPage() {
         </div>
         {/* uploaded file name & size display */}
         <div
-          className={`w-full flex flex-row items-center border-2 rounded-lg px-8 py-1 mt-6   ${
+          className={`w-full flex flex-row items-center border-2 rounded-lg px-4 sm:px-8 py-1 mt-6   ${
             !uploadedFileName && "hidden"
           }`}
         >
@@ -190,7 +190,7 @@ function UploadPage() {
           />
 
           {uploadedFileName && (
-            <p className=" w-full px-8 py-4 flex flex-col justify-between break-words break-all text-xs font-semibold text-blue-900">
+            <p className=" w-full px-2 sm:px-8 py-4 flex flex-col justify-between break-words break-all text-xs font-semibold text-blue-900">
               {uploadedFileName}
               <span className="pt-2 text-zinc-400 font-semibold">
                 ({fileSize})
