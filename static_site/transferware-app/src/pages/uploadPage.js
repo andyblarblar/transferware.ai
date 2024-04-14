@@ -139,90 +139,93 @@ const handleSubmit = async () => {
 
 
   return (
-    <div className="flex flex-col items-center h-screen py-20">
-      <h1 className="w-full py-10 text-center font-semibold text-xl">
-        Upload a photo of your sherd
-      </h1>
-      <div className="w-5/6 h-1/3 flex flex-col items-center justify-center border-2">
-        <img src={photoIcon} className="" alt="photo-icon" />
-        <h2 className="font-medium py-4">
-          Drop your image here, or
-          <label
-            htmlFor="fileInput"
-            className="cursor-pointer font-bold text-blue-600"
-          >
-            {" "}
-            browse
-          </label>
-          <input
-            ref={fileInputRef}
-            id="fileInput"
-            type="file"
-            accept=".png,.jpg,.jpeg"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-        </h2>
-        <p className="text-neutral-400 text-xs">Supports: PNG and JPG images</p>
-        {errorMessage && <p className="text-red-500">{errorMessage}</p>}
-      </div>
-      <div className="relative flex py-5 w-1/2 items-center">
-        <div className="flex-grow border-t border-gray-400"></div>
-        <span className="flex-shrink mx-4 text-gray-400">or</span>
-        <div className="flex-grow border-t border-gray-400"></div>
-      </div>
-      <div className="w-5/6">
-        <div className="p-4">Import from URL</div>
-        <div className="flex justify-between p-4 rounded-md">
-          <input
-            type="text"
-            placeholder="Enter image URL"
-            value={imageUrl}
-            onChange={handleUrlChange}
-            className="flex-grow mr-2 border border-gray-950 rounded-md px-2 py-1"
-          />
-          <button
-            onClick={handleImportFromUrl}
-            className="bg-gray-950 text-white px-4 py-2 rounded-md"
-          >
-            Import
-          </button>
+    <div className="flex bg-slate-400 justify-center items-center w-screen h-screen p-10 sm:p-20">
+      <div className="flex bg-white flex-col items-center md:w-3/5 w-full px-8 sm:px-20 py-10 rounded-xl">
+        <h1 className="w-full pb-5 text-center sm:text-start font-semibold text-xl">
+          Upload a photo of your sherd
+        </h1>
+        <div className="w-full h-1/3 flex flex-col items-center justify-center border-2 py-8 lg:py-16 px-6">
+          <img src={photoIcon} className="" alt="photo-icon" />
+          <h2 className="font-medium py-1">
+            Drop your image here, or
+            <label
+              htmlFor="fileInput"
+              className="cursor-pointer font-bold text-blue-600"
+            >
+              {" "}
+              browse
+            </label>
+            <input
+              ref={fileInputRef}
+              id="fileInput"
+              type="file"
+              accept=".png,.jpg,.jpeg"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </h2>
+          <p className="text-neutral-400 text-xs">
+            Supports: PNG and JPG images
+          </p>
+          {errorMessage && <p className="text-red-500">{errorMessage}</p>}
         </div>
-
-        {/* uploaded file name & size display */}
-        <div className="p-4 rounded-md">
-          <div className={`w-full rounded-md ${!uploadedFileName && "hidden"}`}>
-            {uploadedFileName && (
-              <p className="py-2 px-4 w-full flex justify-between">
-                {uploadedFileName}
-                <span className="flex flex-row text-zinc-400 font-semibold">
-                  ({fileSize})
-                  <img src={cross} className="" alt="photo-icon" />
-                </span>
-              </p>
-            )}
+        <div className="relative flex py-5 w-full items-center">
+          <div className="flex-grow border-t border-gray-400"></div>
+          <span className="flex-shrink mx-4 text-gray-400">or</span>
+          <div className="flex-grow border-t border-gray-400"></div>
+        </div>
+        <div className="w-full">
+          <div className="p-4">Import from URL</div>
+          <div className="flex justify-between bg-gray-100 rounded-md">
+            <input
+              type="text"
+              placeholder="Enter image URL"
+              value={imageUrl}
+              onChange={handleUrlChange}
+              className="flex-grow mr-2 bg-gray-100 px-6 py-4 w-full rounded-md"
+            />
+            <button
+              onClick={handleImportFromUrl}
+              className=" text-gray-500 px-4 py-2 font-semibold"
+            >
+              Upload
+            </button>
           </div>
-        </div>
 
-        <div className="flex justify-center space-x-4">
-          <button
-            className={`border-2 border-black text-black px-4 py-2 rounded-md ${
-              selectedFile ? "" : "opacity-30 cursor-not-allowed"
-            }`}
-            disabled={!selectedFile}
-            onClick={handleCancel}
-          >
-            Cancel
-          </button>
-          <button
-            className={`bg-blue-400  text-black px-4 py-2 rounded-md ${
-              selectedFile ? "" : "opacity-70 cursor-not-allowed"
-            }`}
-            disabled={!selectedFile}
-            onClick={handleSubmit}
-          >
-            Submit
-          </button>
+          {/* uploaded file name & size display */}
+            <div className={`w-full ${!uploadedFileName && "hidden"}`}>
+              {uploadedFileName && (
+                <p className=" w-full mt-6 px-8 py-4 flex flex-col border-2 rounded-lg justify-between break-words break-all text-xs font-semibold text-blue-900">
+                  {uploadedFileName}
+                  <span className="flex flex-row pt-2 text-zinc-400 font-semibold">
+                    ({fileSize})
+                    {/* <img src={cross} className="" alt="photo-icon" /> */}
+                  </span>
+                </p>
+              )}
+            </div>
+  
+
+          <div className="flex justify-center mt-6 sm:justify-end space-x-4">
+            <button
+              className={`border-2 border-gray-400 text-black font-semibold px-4 py-2 rounded-md ${
+                selectedFile ? "" : "opacity-60 cursor-not-allowed"
+              }`}
+              disabled={!selectedFile}
+              onClick={handleCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className={`bg-blue-500  text-white font-semibold px-4 py-2 rounded-md ${
+                selectedFile ? "" : "bg-opacity-70 cursor-not-allowed"
+              }`}
+              disabled={!selectedFile}
+              onClick={handleSubmit}
+            >
+              Submit
+            </button>
+          </div>
         </div>
       </div>
     </div>
