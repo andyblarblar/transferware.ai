@@ -85,20 +85,15 @@ const handleSubmit = async () => {
     formData.append("file", selectedFile);
 
     try {
-      // Post the file to the query endpoint
       const response = await fetch(`${base_url}/query`, {
         method: "POST",
         body: formData,
       });
 
-      // Parse the JSON response
       const queryResults = await response.json();
 
-      // Create a list of fetch promises for each pattern id
       const patternFetchPromises = queryResults.map(async (result) => {
-        const patternResponse = await fetch(
-          `${base_url}/pattern/${result.id}`
-        );
+        const patternResponse = await fetch(`${base_url}/pattern/${result.id}`);
         const patternData = await patternResponse.json();
         return {
           id: result.id,
@@ -108,23 +103,20 @@ const handleSubmit = async () => {
         };
       });
 
-      // Wait for all fetch calls to resolve
       const combinedResults = await Promise.all(patternFetchPromises);
 
-      // Fetch images for each pattern with fallback for errors
       const patternImagePromises = combinedResults.map(async (pattern) => {
         try {
           const imageUrlResponse = await fetch(
             `${base_url}/pattern/image/${pattern.id}`
           );
           if (!imageUrlResponse.ok) throw new Error("Failed to load image");
-          const imageUrl = await imageUrlResponse.url; 
+          const imageUrl = await imageUrlResponse.url;
           return {
             ...pattern,
             imageUrl: imageUrl,
           };
         } catch {
-          // Fallback image path if the fetch fails or response is not OK
           return {
             ...pattern,
             imageUrl:
@@ -136,8 +128,8 @@ const handleSubmit = async () => {
       const finalResults = await Promise.all(patternImagePromises);
       setData(finalResults);
 
-      // Navigate to the next page
-      navigate("/viewMatches");
+      // Use replace here to navigate to viewMatches
+      navigate("/viewMatches", { replace: true });
     } catch (error) {
       console.error("Error fetching data:", error);
       setErrorMessage("Failed to submit the file.");

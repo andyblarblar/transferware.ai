@@ -3,9 +3,10 @@ import "./loadingPage.css"
 import archeologistDigging from "../assets/gifs/archeologist-digging.gif"
 function LoadingAnimation(){
     return (
-      <div className="flex bg-neutral-300 flex-col justify-start items-center h-screen">
-        <img src={archeologistDigging}></img>
+      <div className="flex bg-white flex-col justify-center items-center h-screen">
+        <img className="h-3/5" src={archeologistDigging}></img>
         <div class="loader"></div>
+        <div class="loader2"></div> 
       </div>
     );
 }
