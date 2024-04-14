@@ -64,6 +64,7 @@ function UploadPage() {
         setSelectedFile(imageFile);
         setUploadedFileName(filename);
         setFileSize((imageBlob.size / 1024).toFixed(2) + " KB");
+        setImagePreviewUrl(URL.createObjectURL(imageBlob));
         setErrorMessage("");
         setImageUrl("");
       } catch (error) {
