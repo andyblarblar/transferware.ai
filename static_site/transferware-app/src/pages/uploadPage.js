@@ -9,6 +9,7 @@ function UploadPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null); // State to hold the preview URL
   const [fileSize, setFileSize] = useState("");
   const fileInputRef = useRef(null); // Added useRef to create a reference to the file input
   const { setData } = useData();
@@ -23,6 +24,7 @@ function UploadPage() {
       setSelectedFile(file);
       setErrorMessage("");
       setUploadedFileName(file.name);
+      setImagePreviewUrl(URL.createObjectURL(file)); // Create and set the image URL for preview
 
       // Calculate file size in kilobytes
       const fileSizeInKB = Math.round((file.size / 1024) * 100) / 100;
@@ -31,6 +33,7 @@ function UploadPage() {
       setSelectedFile(null);
       setUploadedFileName(""); // Clear uploaded file name
       setFileSize(""); // Clear file size
+      setImagePreviewUrl(null); // Clear the image preview URL
       setErrorMessage("Please select a valid PNG or JPG file.");
     }
   };
@@ -40,113 +43,117 @@ function UploadPage() {
   };
 
   const handleImportFromUrl = async () => {
-  if (imageUrl.trim() !== "") {
-    try {
-      // Fetch the image from the URL as a Blob
-      const response = await fetch(imageUrl);
-      const imageBlob = await response.blob();
+    if (imageUrl.trim() !== "") {
+      try {
+        // Fetch the image from the URL as a Blob
+        const response = await fetch(imageUrl);
+        const imageBlob = await response.blob();
 
-      // Create a filename from URL
-      let filename = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
-      const queryIndex = filename.indexOf("?");
-      if (queryIndex !== -1) {
-        filename = filename.substring(0, queryIndex);
+        // Create a filename from URL
+        let filename = imageUrl.substring(imageUrl.lastIndexOf("/") + 1);
+        const queryIndex = filename.indexOf("?");
+        if (queryIndex !== -1) {
+          filename = filename.substring(0, queryIndex);
+        }
+
+        // Create a File object from the Blob
+        const imageFile = new File([imageBlob], filename, {
+          type: imageBlob.type,
+        });
+
+        setSelectedFile(imageFile);
+        setUploadedFileName(filename);
+        setFileSize((imageBlob.size / 1024).toFixed(2) + " KB");
+        setErrorMessage("");
+        setImageUrl("");
+      } catch (error) {
+        console.error("Error loading image:", error);
+        setErrorMessage("Error: Unable to load image from URL.");
       }
-
-      // Create a File object from the Blob
-      const imageFile = new File([imageBlob], filename, { type: imageBlob.type });
-
-      setSelectedFile(imageFile);
-      setUploadedFileName(filename);
-      setFileSize((imageBlob.size / 1024).toFixed(2) + " KB");
-      setErrorMessage("");
-      setImageUrl("");
-    } catch (error) {
-      console.error('Error loading image:', error);
-      setErrorMessage("Error: Unable to load image from URL.");
+    } else {
+      setErrorMessage("Please enter a valid image URL.");
     }
-  } else {
-    setErrorMessage("Please enter a valid image URL.");
-  }
-};
-
+  };
 
   const handleCancel = () => {
     setSelectedFile(null);
     setUploadedFileName("");
     setFileSize("");
+    setImagePreviewUrl(null); // Clear the image preview URL
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-const handleSubmit = async () => {
-  if (selectedFile) {
-    navigate("/loading");
-    const formData = new FormData();
-    formData.append("file", selectedFile);
+  const handleSubmit = async () => {
+    if (selectedFile) {
+      navigate("/loading");
+      const formData = new FormData();
+      formData.append("file", selectedFile);
 
-    try {
-      const response = await fetch(`${base_url}/query`, {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch(`${base_url}/query`, {
+          method: "POST",
+          body: formData,
+        });
 
-      const queryResults = await response.json();
+        const queryResults = await response.json();
 
-      const patternFetchPromises = queryResults.map(async (result) => {
-        const patternResponse = await fetch(`${base_url}/pattern/${result.id}`);
-        const patternData = await patternResponse.json();
-        return {
-          id: result.id,
-          confidence: result.confidence,
-          pattern_name: patternData.pattern_name,
-          tcc_url: patternData.tcc_url,
-        };
-      });
-
-      const combinedResults = await Promise.all(patternFetchPromises);
-
-      const patternImagePromises = combinedResults.map(async (pattern) => {
-        try {
-          const imageUrlResponse = await fetch(
-            `${base_url}/pattern/image/${pattern.id}`
+        const patternFetchPromises = queryResults.map(async (result) => {
+          const patternResponse = await fetch(
+            `${base_url}/pattern/${result.id}`
           );
-          if (!imageUrlResponse.ok) throw new Error("Failed to load image");
-          const imageUrl = await imageUrlResponse.url;
+          const patternData = await patternResponse.json();
           return {
-            ...pattern,
-            imageUrl: imageUrl,
+            id: result.id,
+            confidence: result.confidence,
+            pattern_name: patternData.pattern_name,
+            tcc_url: patternData.tcc_url,
           };
-        } catch {
-          return {
-            ...pattern,
-            imageUrl:
-              "https://cdn.vectorstock.com/i/500p/36/49/no-image-symbol-missing-available-icon-gallery-vector-43193649.jpg",
-          };
-        }
-      });
+        });
 
-      const finalResults = await Promise.all(patternImagePromises);
-      setData(finalResults);
+        const combinedResults = await Promise.all(patternFetchPromises);
 
-      // Use replace here to navigate to viewMatches
-      navigate("/viewMatches", { replace: true });
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      setErrorMessage("Failed to submit the file.");
+        const patternImagePromises = combinedResults.map(async (pattern) => {
+          try {
+            const imageUrlResponse = await fetch(
+              `${base_url}/pattern/image/${pattern.id}`
+            );
+            if (!imageUrlResponse.ok) throw new Error("Failed to load image");
+            const imageUrl = await imageUrlResponse.url;
+            return {
+              ...pattern,
+              imageUrl: imageUrl,
+            };
+          } catch {
+            return {
+              ...pattern,
+              imageUrl:
+                "https://cdn.vectorstock.com/i/500p/36/49/no-image-symbol-missing-available-icon-gallery-vector-43193649.jpg",
+            };
+          }
+        });
+
+        const finalResults = await Promise.all(patternImagePromises);
+        setData(finalResults);
+
+        // Use replace here to navigate to viewMatches
+        navigate("/viewMatches", { replace: true });
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setErrorMessage("Failed to submit the file.");
+      }
     }
-  }
-};
+  };
 
 
   return (
-    <div className="flex bg-slate-400 justify-center items-center w-screen h-screen p-10 sm:p-20">
-      <div className="flex bg-white flex-col items-center md:w-3/5 w-full px-8 sm:px-20 py-10 rounded-xl">
+    <div className="flex bg-slate-950 justify-center items-center w-full h-screen p-10">
+      <div className="flex bg-white flex-col items-center md:w-3/5 w-full px-8 sm:px-20 py-4 rounded-xl shadow-[5px_10px_43px_5px_#2B6CB0]">
         <h1 className="w-full pb-5 text-center sm:text-start font-semibold text-xl">
-          Upload a photo of your sherd
+          Upload a Photo of Your Sherd
         </h1>
         <div className="w-full h-1/3 flex flex-col items-center justify-center border-2 py-8 lg:py-16 px-6">
-          <img src={photoIcon} className="" alt="photo-icon" />
-          <h2 className="font-medium py-1">
+          <img src={photoIcon} className="max-h-28" alt="photo-icon" />
+          <h2 className="font-medium py-0">
             Drop your image here, or
             <label
               htmlFor="fileInput"
@@ -169,6 +176,29 @@ const handleSubmit = async () => {
           </p>
           {errorMessage && <p className="text-red-500">{errorMessage}</p>}
         </div>
+        {/* uploaded file name & size display */}
+        <div
+          className={`w-full flex flex-row items-center border-2 rounded-lg px-8 py-1 mt-6   ${
+            !uploadedFileName && "hidden"
+          }`}
+        >
+          <img
+            src={imagePreviewUrl}
+            alt="Preview picture"
+            className="max-h-16 rounded-lg"
+          />
+
+          {uploadedFileName && (
+            <p className=" w-full px-8 py-4 flex flex-col justify-between break-words break-all text-xs font-semibold text-blue-900">
+              {uploadedFileName}
+              <span className="pt-2 text-zinc-400 font-semibold">
+                ({fileSize})
+                {/* <img src={cross} className="" alt="photo-icon" /> */}
+              </span>
+            </p>
+          )}
+        </div>
+
         <div className="relative flex py-5 w-full items-center">
           <div className="flex-grow border-t border-gray-400"></div>
           <span className="flex-shrink mx-4 text-gray-400">or</span>
@@ -191,20 +221,6 @@ const handleSubmit = async () => {
               Upload
             </button>
           </div>
-
-          {/* uploaded file name & size display */}
-            <div className={`w-full ${!uploadedFileName && "hidden"}`}>
-              {uploadedFileName && (
-                <p className=" w-full mt-6 px-8 py-4 flex flex-col border-2 rounded-lg justify-between break-words break-all text-xs font-semibold text-blue-900">
-                  {uploadedFileName}
-                  <span className="flex flex-row pt-2 text-zinc-400 font-semibold">
-                    ({fileSize})
-                    {/* <img src={cross} className="" alt="photo-icon" /> */}
-                  </span>
-                </p>
-              )}
-            </div>
-  
 
           <div className="flex justify-center mt-6 sm:justify-end space-x-4">
             <button
