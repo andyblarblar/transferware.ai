@@ -80,6 +80,7 @@ function UploadPage() {
 
 const handleSubmit = async () => {
   if (selectedFile) {
+    navigate("/loading");
     const formData = new FormData();
     formData.append("file", selectedFile);
 
@@ -117,7 +118,7 @@ const handleSubmit = async () => {
             `${base_url}/pattern/image/${pattern.id}`
           );
           if (!imageUrlResponse.ok) throw new Error("Failed to load image");
-          const imageUrl = await imageUrlResponse.url; // Assuming the URL itself is what you need
+          const imageUrl = await imageUrlResponse.url; 
           return {
             ...pattern,
             imageUrl: imageUrl,

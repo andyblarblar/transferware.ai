@@ -5,6 +5,7 @@ import "./App.css";
 import Landing from "./pages/landing.js";
 import UploadPage from "./pages/uploadPage.js";
 import ViewMatches from "./pages/viewMatches";
+import LoadingAnimation from "./pages/loadingPage";
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/uploadPage" element={<UploadPage />} />
           <Route path="/viewMatches" element={<ViewMatches />} />
+          <Route path="/loading" element={<LoadingAnimation/>} />
         </Routes>
       </DataProvider>
     </Router>
