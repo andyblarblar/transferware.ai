@@ -152,7 +152,7 @@ function UploadPage() {
         <h1 className="w-full pb-5 text-center sm:text-start font-semibold text-xl">
           Upload a Photo of Your Sherd
         </h1>
-        <div className="w-full h-1/3 flex flex-col items-center justify-center border-2 py-8 lg:py-16 px-6">
+        <div className="w-full h-1/3 flex flex-col items-center justify-center border-2 border-slate-300 border-dashed rounded-md py-8 lg:py-16 px-6">
           <img src={photoIcon} className="max-h-28" alt="photo-icon" />
           <h2 className="font-medium py-0">
             Drop your image here, or
