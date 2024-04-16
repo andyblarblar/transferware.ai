@@ -7,35 +7,41 @@ const MatchResults = () => {
   if (!data) return <p>No data available</p>;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 p-4 w-5/6">
-      {data.map((item) => (
-        <div key={item.id} className="p-3 border rounded shadow-sm">
-          <img
-            src={item.imageUrl}
-            alt="Pattern-img"
-            className="w-1/2 lg:w-2/5 h-auto mb-2"
-          />
-          <p className="mb-4">
-            <span className="font-semibold">Pattern name:</span>{" "}
-            {item.pattern_name}
-          </p>
-          <p className="mb-4">
-            <span className="font-semibold">Confidence:</span>{" "}
-            {item.confidence.toFixed(3)}%
-          </p>
-          <p className="break-words break-all mb-2">
-            <span className="font-semibold">Pattern URL: </span>
-            <a
-              className="text-blue-600"
-              href={item.tcc_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {item.tcc_url}
-            </a>
-          </p>
-        </div>
-      ))}
+    <div className="flex items-center lg:p-12">
+      <div className="flex grid grid-cols-2 lg:grid-cols-3 gap-2 p-4 w-full">
+        {data.map((item) => (
+          <div
+            key={item.id}
+            className="flex flex-col justify-end p-3 hover:border hover:shadow-sm"
+          >
+            <div className="flex justify-center lg:min-h-80 p-6">
+              <img
+                src={item.imageUrl}
+                alt="Pattern-img"
+                className="w-full lg:w-full mb-2"
+              />
+            </div>
+            <p className="mb-1 font-serif text-xl font-semibold">
+              <span className="font-semibold "></span>{" "}
+              {item.pattern_name}
+            </p>
+            <p className="mb-4 font-light text-gray-700">
+              <span className="">Confidence:</span> {item.confidence.toFixed(3)}
+            </p>
+            <p className="break-words break-all mb-2 font-serif">
+              <span className="font-semibold">Pattern URL: </span>
+              <a
+                className="text-blue-800"
+                href={item.tcc_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {item.tcc_url}
+              </a>
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
