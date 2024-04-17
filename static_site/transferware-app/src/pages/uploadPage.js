@@ -234,7 +234,7 @@ function UploadPage() {
               Cancel
             </button>
             <button
-              className={`bg-blue-500  text-white font-semibold px-4 py-2 rounded-md ${
+              className={`bg-black text-white font-semibold px-4 py-2 rounded-md ${
                 selectedFile ? "" : "bg-opacity-70 cursor-not-allowed"
               }`}
               disabled={!selectedFile}
