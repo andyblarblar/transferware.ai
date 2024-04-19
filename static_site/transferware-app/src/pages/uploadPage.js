@@ -137,7 +137,10 @@ function UploadPage() {
         setData(finalResults);
 
         // Use replace here to navigate to viewMatches
-        navigate("/viewMatches", { replace: true });
+        navigate("/viewMatches", {
+          replace: true,
+          state: { imagePreviewUrl: imagePreviewUrl },
+        });
       } catch (error) {
         console.error("Error fetching data:", error);
         setErrorMessage("Failed to submit the file.");

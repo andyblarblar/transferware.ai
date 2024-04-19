@@ -7,14 +7,14 @@ const MatchResults = () => {
   if (!data) return <p>No data available</p>;
 
   return (
-    <div className="flex items-center lg:p-12">
+    <div className="flex items-center lg:p-4">
       <div className="flex grid grid-cols-2 lg:grid-cols-3 gap-2 p-4 w-full">
         {data.map((item) => (
           <div
             key={item.id}
             className="flex flex-col justify-end p-3 hover:border hover:shadow-sm"
           >
-            <div className="flex justify-center lg:min-h-80 p-6">
+            <div className="flex justify-center lg:min-w-60 p-6">
               <img
                 src={item.imageUrl}
                 alt="Pattern-img"
@@ -22,8 +22,7 @@ const MatchResults = () => {
               />
             </div>
             <p className="mb-1 font-serif text-xl font-semibold">
-              <span className="font-semibold "></span>{" "}
-              {item.pattern_name}
+              <span className="font-semibold "></span> {item.pattern_name}
             </p>
             <p className="mb-4 font-light text-gray-700">
               <span className="">Confidence:</span> {item.confidence.toFixed(3)}
