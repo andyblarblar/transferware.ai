@@ -14,7 +14,7 @@ const MatchResults = () => {
             key={item.id}
             className="flex flex-col justify-end p-3 hover:border hover:shadow-sm"
           >
-            <div className="flex justify-center lg:min-w-60 p-6">
+            <div className="flex justify-start lg:min-w-60 sm:p-6">
               <img
                 src={item.imageUrl}
                 alt="Pattern-img"

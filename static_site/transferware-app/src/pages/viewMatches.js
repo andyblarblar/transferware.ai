@@ -7,14 +7,25 @@ function ViewMatches() {
   const { imagePreviewUrl } = location.state || {}; // Destructure imagePreviewUrl from state, defaulting to an empty object if state is undefined
 
   return (
-    <div className="flex flex-col xl:flex-row h-screen">
+    <div className="flex flex-col xl:flex-row sm:h-screen">
       {imagePreviewUrl ? (
-        <div className="flex items-center px-12 bg-zinc-900">
-          <img
-            className="max-w-80  shadow-[0_3px_10px_#718096] rounded-sm"
-            src={imagePreviewUrl}
-            alt="Uploaded Preview"
-          />
+        <div className="flex items-center justify-center p-12 bg-zinc-900">
+          <div className="flex flex-col items-center">
+            <div className=" mb-4 p-6">
+              <h1 className="font-semibold text-white text-2xl font-serif ">
+                Your Match Results
+              </h1>
+              <hr className="rounded w-1/2 h-1  my-4 border-0 rounded bg-amber-600"></hr>
+              <p className="text-white font-serif">
+                These are transferware pieces from our database that look similar to the sherd that you attached. The lower the confidence number is, the closer of a match the pattern is. Navigative to the TCC website url to get more information on each pattern. 
+              </p>
+            </div>
+            <img
+              className="max-w-80"
+              src={imagePreviewUrl}
+              alt="Uploaded Preview"
+            />
+          </div>
         </div>
       ) : (
         <p>No image preview available</p>
