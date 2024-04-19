@@ -20,9 +20,8 @@ function Landing() {
               Upload your sherd, Find your pattern
             </h1>
             <p className="my-8 lg:w-4/5">
-              Explain how this tool is used blah blah blah ai blah. Lorem ipsum
-              dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
-              incididunt ut labore et dolore magna.
+              Welcome to transferware.ai! Our tool was designed to be used by
+              anyone, not just archaeologists. Simply upload an image of your sherd or plate and our model will provide the top matches for you. 
             </p>
             <Link to="/uploadPage">
               <button className="bg-black font-semibold text-white p-4 px-14 rounded-lg rounded-bl-none">
