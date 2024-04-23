@@ -8,11 +8,6 @@ import databaseIcon from "../assets/images/database-icon.png";
 function Landing() {
   return (
     <div className="h-screen overflow-y-hidden relative">
-      <div className="py-4 px-10 lg:px-20 h-[64px]">
-        <h1 className="text-2xl font-semibold">
-          Transferware.<span className="text-blue-500">ai</span>
-        </h1>
-      </div>
       <div className="flex flex-col lg:flex-row">
         <div className="header-column flex flex-col pb-0 pt-10 px-0 lg:py-16 sm:px-20">
           <div className="header lg:w-full px-10 sm:px-0">
