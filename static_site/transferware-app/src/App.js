@@ -14,10 +14,10 @@ function App() {
     <Router>
       <DataProvider>
         <Routes>
-          <Route path="/" element={<><Navbar /><Landing /></>} />
+          <Route path="/" element={<><NavbarAlternate /><Landing /></>} />
           <Route path="/uploadPage" element={<><NavbarAlternate /><UploadPage /></>} />
           <Route path="/viewMatches" element={<><Navbar /><ViewMatches /></>} />
-          <Route path="/loading" element={<><NavbarAlternate/><LoadingAnimation /></>} />
+          <Route path="/loading" element={<><Navbar/><LoadingAnimation /></>} />
         </Routes>
       </DataProvider>
     </Router>
