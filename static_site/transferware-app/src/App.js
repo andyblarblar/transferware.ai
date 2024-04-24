@@ -17,7 +17,7 @@ function App() {
           <Route path="/" element={<><Navbar /><Landing /></>} />
           <Route path="/uploadPage" element={<><NavbarAlternate /><UploadPage /></>} />
           <Route path="/viewMatches" element={<><Navbar /><ViewMatches /></>} />
-          <Route path="/loading" element={<><NavbarAlternate /><LoadingAnimation /></>} />
+          <Route path="/loading" element={<><NavbarAlternate/><LoadingAnimation /></>} />
         </Routes>
       </DataProvider>
     </Router>

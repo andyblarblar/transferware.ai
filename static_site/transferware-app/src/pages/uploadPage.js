@@ -158,7 +158,7 @@ function UploadPage() {
         </h1>
         <div className="w-full h-1/3 flex flex-col items-center justify-center border-2 border-slate-300 border-dashed rounded-md py-8 lg:py-16 px-6">
           <img src={photoIcon} className="max-h-28" alt="photo-icon" />
-          <h2 className="font-medium py-0">
+          <h2 className="text-center font-medium py-0">
             Drop your image here, or
             <label
               htmlFor="fileInput"
@@ -176,7 +176,7 @@ function UploadPage() {
               className="hidden"
             />
           </h2>
-          <p className="text-neutral-400 text-xs">
+          <p className="text-neutral-400 text-xs py-2 sm:py-0">
             Supports: PNG and JPG images
           </p>
           {errorMessage && <p className="text-red-500">{errorMessage}</p>}
