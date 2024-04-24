@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 const Navbar = () => {
   return (
-    <div className=" flex flex-row items-center justify-between py-4 px-6 lg:px-20 h-[64px]">
+    <div className=" flex flex-row items-center justify-between shadow-md w-full fixed py-3 px-6 lg:px-20 ">
       <h1 className="text-2xl font-semibold">
         Transferware.<span className="text-blue-500">ai</span>
       </h1>
