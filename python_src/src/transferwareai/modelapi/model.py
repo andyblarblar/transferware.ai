@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+from asyncio import Lock
 
 from ..config import settings
 from ..models.adt import Model, Validator, AbstractModelFactory
@@ -9,6 +10,8 @@ from ..tccapi.api_cache import ApiCache
 
 # Model singleton
 _model: Optional[Model] = None
+_model_lock = Lock()
+
 _ds: Optional[CacheDataset] = None
 _api: Optional[ApiCache] = None
 
@@ -24,13 +27,26 @@ def initialize_model():
     _ds = CacheDataset(_api, skip_ids=settings.training.skip_ids)
 
 
-def get_model() -> Model:
+async def reload_model():
+    """Reloads the model from disk."""
+    global _model, _model_lock
+    async with _model_lock:
+        factory = get_abstract_factory(settings.model_implimentation, "query")
+        _model = factory.get_model()
+
+
+async def get_model() -> Model:
     """Returns the query model being used. Must have been initialized first."""
-    global _model
+    global _model, _model_lock
     if _model is None:
         raise ValueError("Model is not initialized")
 
-    return _model
+    # Lock model whenever it is in use to allow for updates
+    try:
+        await _model_lock.acquire()
+        yield _model
+    finally:
+        _model_lock.release()
 
 
 def get_api() -> ApiCache:

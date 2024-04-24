@@ -21,7 +21,7 @@ app = FastAPI()
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     initialize_model()
 
 
