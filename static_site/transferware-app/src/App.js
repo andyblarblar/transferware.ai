@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { DataProvider } from "./DataContext"; // Import the DataProvider
 import "./App.css";
 import Navbar from "./components/navbar"; 
+import NavbarAlternate from "./components/navbarAlternate"; 
 import Landing from "./pages/landing.js";
 import UploadPage from "./pages/uploadPage.js";
 import ViewMatches from "./pages/viewMatches";
@@ -12,12 +13,11 @@ function App() {
   return (
     <Router>
       <DataProvider>
-        <Navbar />
         <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/uploadPage" element={<UploadPage />} />
-          <Route path="/viewMatches" element={<ViewMatches />} />
-          <Route path="/loading" element={<LoadingAnimation />} />
+          <Route path="/" element={<><Navbar /><Landing /></>} />
+          <Route path="/uploadPage" element={<><NavbarAlternate /><UploadPage /></>} />
+          <Route path="/viewMatches" element={<><Navbar /><ViewMatches /></>} />
+          <Route path="/loading" element={<><NavbarAlternate /><LoadingAnimation /></>} />
         </Routes>
       </DataProvider>
     </Router>

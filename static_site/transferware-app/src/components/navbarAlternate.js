@@ -1,9 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-const Navbar = () => {
+const NavbarAlternate = () => {
   return (
-    <div className=" flex flex-row items-center justify-between bg-white shadow-md w-full fixed py-3 px-6 lg:px-20 ">
+    <div className=" flex flex-row items-center justify-between text-white w-full fixed py-3 px-6 lg:px-20 ">
       <h1 className="text-xl font-semibold">
         Transferware.<span className="text-blue-500">ai</span>
       </h1>
@@ -22,4 +22,4 @@ const Navbar = () => {
   );
 };
 
-export default Navbar;
+export default NavbarAlternate;
