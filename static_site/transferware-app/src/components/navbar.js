@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 
 const Navbar = () => {
   return (
-    <div className=" flex flex-row items-center justify-between bg-white shadow-md w-full fixed py-3 px-6 lg:px-20 ">
-      <h1 className="text-xl font-semibold">
+    <div className=" flex flex-row items-center justify-between shadow-md w-full fixed py-3 px-6 lg:px-20 " id={"navbar"}>
+      <Link to={"/"} className="text-2xl font-semibold">
         Transferware.<span className="text-blue-500">ai</span>
-      </h1>
+      </Link>
       <ul className="flex font-semibold space-x-2 sm:space-x-8 sm:text-lg">
         <li className="hover:text-blue-500">
           <Link to="/">Home</Link>

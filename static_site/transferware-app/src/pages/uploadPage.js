@@ -1,12 +1,13 @@
 import React, { useState, useRef} from "react";
-import { useNavigate } from 'react-router-dom'; 
+import {useLocation, useNavigate} from 'react-router-dom';
 import photoIcon from "../assets/images/photo-icon.png";
 import cross from "../assets/images/Cross.png";
 import { useData } from "../DataContext";
 
 function UploadPage() {
+  const location = useLocation();
   const [selectedFile, setSelectedFile] = useState(null);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState((location.state || {errorMessage: ""}).errorMessage);
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState(null); // State to hold the preview URL
@@ -142,8 +143,8 @@ function UploadPage() {
           state: { imagePreviewUrl: imagePreviewUrl },
         });
       } catch (error) {
+        navigate("/uploadPage", {state: {errorMessage: `Failed to submit the file.`}})
         console.error("Error fetching data:", error);
-        setErrorMessage("Failed to submit the file.");
       }
     }
   };

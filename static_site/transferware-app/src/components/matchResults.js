@@ -10,9 +10,11 @@ const MatchResults = () => {
     <div className="flex items-center lg:p-4">
       <div className="flex grid grid-cols-2 lg:grid-cols-3 gap-2 p-4 w-full">
         {data.map((item) => (
-          <div
+          <a
             key={item.id}
             className="flex flex-col justify-center p-3 hover:border hover:shadow-sm"
+            href={item.tcc_url}
+            target="_blank"
           >
             <div className="flex flex-row items-center lg:min-w-60 sm:p-6">
               <img
@@ -27,18 +29,7 @@ const MatchResults = () => {
             <p className="mb-4 font-light text-gray-700">
               <span className="">Confidence:</span> {item.confidence.toFixed(3)}
             </p>
-            <p className="break-words break-all mb-2 font-serif">
-              <span className="font-semibold">Pattern URL: </span>
-              <a
-                className="text-blue-800"
-                href={item.tcc_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {item.tcc_url}
-              </a>
-            </p>
-          </div>
+          </a>
         ))}
       </div>
     </div>
