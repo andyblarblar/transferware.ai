@@ -9,7 +9,7 @@ function Landing() {
   return (
     <div className="h-screen overflow-y-hidden relative">
       <div className="flex flex-col lg:flex-row">
-        <div className="header-column flex flex-col justify-center pb-0 pt-10 px-0 lg:py-16 sm:px-20">
+        <div className="mt-20 header-column flex flex-col justify-center pb-0 pt-10 px-0 lg:py-16 sm:px-20">
           <div className="header lg:w-full px-10 sm:px-0">
             <h1 className="font-bold text-3xl lg:text-6xl my-6">
               Upload your sherd, Find your pattern
