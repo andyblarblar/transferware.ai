@@ -152,7 +152,7 @@ function UploadPage() {
 
   return (
     <div className="flex justify-center items-center w-full p-10 h-screen">
-      <div className="flex bg-white flex-col items-center md:w-3/5 w-full px-8 sm:px-20 py-4 rounded-xl shadow-[0px_20px_50px_0px_#A0AEC0]">
+      <div className="flex bg-white  flex-col items-center md:w-3/5 w-full px-8 sm:px-20 py-4 rounded-xl shadow-[rgba(6,_24,_44,_0.4)_0px_0px_0px_2px,_rgba(6,_24,_44,_0.65)_0px_4px_6px_-1px,_rgba(255,_255,_255,_0.08)_0px_1px_0px_inset]">
         <h1 className="w-full pb-5 text-center sm:text-start font-semibold text-xl">
           Upload a Photo of Your Sherd
         </h1>
