@@ -2,6 +2,8 @@
 
 # Abstract factory used
 model_implimentation = "ZhaoModelFactory"
+# Changes wether the cache will be automatically updated. Use for debugging
+update_cache = true
 
 # Settings for the training script
 [training]
@@ -35,3 +37,5 @@ port = 8080
 workers = 1
 # IDs to skip when training the model. Use when training errors due to corrupted image files.
 skip_ids = [67001]
+# CORS origins to allow
+origins = ["*"]

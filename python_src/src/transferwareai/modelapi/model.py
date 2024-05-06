@@ -23,7 +23,9 @@ def initialize_model():
     _model = factory.get_model()
 
     res_path = Path(settings.query.resource_dir)
-    _api = ApiCache.from_cache(res_path.joinpath("cache"), no_update=False)
+    _api = ApiCache.from_cache(
+        res_path.joinpath("cache"), no_update=not settings.update_cache
+    )
     _ds = CacheDataset(_api, skip_ids=settings.training.skip_ids)
 
 
