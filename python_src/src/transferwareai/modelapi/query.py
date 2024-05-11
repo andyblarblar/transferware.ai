@@ -1,9 +1,12 @@
 import logging
 import time
+from pathlib import Path
 from typing import Annotated
+import tarfile
+from filelock import Timeout, FileLock
 
 import torchvision
-from fastapi import FastAPI, File, HTTPException, Depends
+from fastapi import FastAPI, File, Header, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import torch
 from pydantic import BaseModel
@@ -11,6 +14,7 @@ from pydantic import BaseModel
 from transferwareai.config import settings
 from transferwareai.modelapi.model import (
     initialize_model,
+    reload_model,
     get_model,
     get_api,
 )
@@ -82,3 +86,41 @@ async def get_data_for_pattern(id: int, api: Annotated[ApiCache, Depends(get_api
     url = api.get_tcc_url_for_pattern_id(id)
 
     return Metadata(pattern_id=id, pattern_name=name, tcc_url=url)
+
+
+@app.post("/update")
+async def update_model(file: UploadFile, token=Header("Authorization")):
+    """Uploads new model resources. file is a tar archive that will be extracted into resource directory."""
+    # Verify access token
+    if token != settings.access_token:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    lock_path = Path(settings.query.resource_dir) / ".$model.lock"
+
+    # Acquire lock
+    try:
+        with FileLock(lock_path, timeout=0):
+            # Extract the tarball
+            with tarfile.open(fileobj=file.file) as t:
+                logging.debug("Extracting new model resources")
+                t. extractall(path=settings.query.resource_dir)
+    except Timeout:
+        raise HTTPException(status_code=503, detail="Model update in progress")
+
+
+@app.post("/reload")
+async def reload_model_route(token=Header("Authorization")):
+    """Reload the model from disk."""
+    # Verify access token
+    if token != settings.access_token:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    lock_path = Path(settings.query.resource_dir) / ".$model.lock"
+
+    # Acquire lock
+    try:
+        with FileLock(lock_path, timeout=0):
+            logging.debug("Reloading model from disk")
+            await reload_model()
+    except Timeout:
+        raise HTTPException(status_code=503, detail="Model update in progress")
