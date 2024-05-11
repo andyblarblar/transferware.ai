@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 from typing import Annotated
 import tarfile
 from filelock import Timeout, FileLock
@@ -86,39 +87,40 @@ async def get_data_for_pattern(id: int, api: Annotated[ApiCache, Depends(get_api
 
     return Metadata(pattern_id=id, pattern_name=name, tcc_url=url)
 
+
 @app.post("/update")
-async def update_model(token: Annotated[str, Header("Authorization")], file: Annotated[UploadFile, File()]):
-    """Upload a new model to the system."""
+async def update_model(file: UploadFile, token=Header("Authorization")):
+    """Uploads new model resources. file is a tar archive that will be extracted into resource directory."""
     # Verify access token
-    if token != settings.query.access_token:
+    if token != settings.access_token:
         raise HTTPException(status_code=401, detail="Invalid access token")
 
-    lock_path = f"{settings.query.resource_dir}/.$model.lock"
+    lock_path = Path(settings.query.resource_dir) / ".$model.lock"
 
     # Acquire lock
     try:
-        with FileLock(lock_path, timeout=5): # Will need to test and adjust this timeout
-            # Read the tarball
-            tarball = await file.read()
-
+        with FileLock(lock_path, timeout=0):
             # Extract the tarball
-            with tarfile.open(fileobj=tarball) as t:
-                t.extractall(settings.query.resource_dir)
-            return {"status": "ok"}
+            with tarfile.open(fileobj=file.file) as t:
+                logging.debug("Extracting new model resources")
+                t. extractall(path=settings.query.resource_dir)
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
-    
+
+
 @app.post("/reload")
-async def reload_model_route(token: Annotated[str, Header("Authorization")]):
+async def reload_model_route(token=Header("Authorization")):
     """Reload the model from disk."""
     # Verify access token
-    if token != settings.query.access_token:
+    if token != settings.access_token:
         raise HTTPException(status_code=401, detail="Invalid access token")
-    lock_path = f"{settings.query.resource_dir}/.$model.lock"
+
+    lock_path = Path(settings.query.resource_dir) / ".$model.lock"
+
     # Acquire lock
     try:
-        with FileLock(lock_path):
+        with FileLock(lock_path, timeout=0):
+            logging.debug("Reloading model from disk")
             await reload_model()
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
-    return {"status": "ok"}
