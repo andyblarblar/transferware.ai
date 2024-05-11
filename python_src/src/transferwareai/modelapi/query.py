@@ -86,7 +86,7 @@ async def get_data_for_pattern(id: int, api: Annotated[ApiCache, Depends(get_api
     return Metadata(pattern_id=id, pattern_name=name, tcc_url=url)
 
 @app.post("/update")
-async def update_model(file: UploadFile = File(...), token: str = Header(...)):
+async def update_model(token: str, file: Annotated[UploadFile, File()]):
     """Upload a new model to the system."""
     # Verify access token
     if token != settings.query.access_token:
@@ -106,3 +106,18 @@ async def update_model(file: UploadFile = File(...), token: str = Header(...)):
             return {"status": "ok"}
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
+    
+@app.post("/reload")
+async def reload_model(token: str):
+    """Reload the model from disk."""
+    # Verify access token
+    if token != settings.query.access_token:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+    lock_path = f"{settings.query.resource_dir}/.$model.lock"
+    # Acquire lock
+    try:
+        with FileLock(lock_path):
+            await reload_model()
+    except Timeout:
+        raise HTTPException(status_code=503, detail="Model update in progress")
+    return {"status": "ok"}
