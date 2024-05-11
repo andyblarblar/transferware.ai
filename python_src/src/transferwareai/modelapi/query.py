@@ -1,9 +1,11 @@
 import logging
 import time
 from typing import Annotated
+import tarfile
+from filelock import Timeout, FileLock
 
 import torchvision
-from fastapi import FastAPI, File, HTTPException, Depends
+from fastapi import FastAPI, File, Header, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import torch
 from pydantic import BaseModel
@@ -82,3 +84,25 @@ async def get_data_for_pattern(id: int, api: Annotated[ApiCache, Depends(get_api
     url = api.get_tcc_url_for_pattern_id(id)
 
     return Metadata(pattern_id=id, pattern_name=name, tcc_url=url)
+
+@app.post("/update")
+async def update_model(file: UploadFile = File(...), token: str = Header(...)):
+    """Upload a new model to the system."""
+    # Verify access token
+    if token != settings.query.access_token:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    lock_path = f"{settings.query.resource_dir}/.$model.lock"
+
+    # Acquire lock
+    try:
+        with FileLock(lock_path, timeout=5): # Will need to test and adjust this timeout
+            # Read the tarball
+            tarball = await file.read()
+
+            # Extract the tarball
+            with tarfile.open(fileobj=tarball) as t:
+                t.extractall(settings.query.resource_dir)
+            return {"status": "ok"}
+    except Timeout:
+        raise HTTPException(status_code=503, detail="Model update in progress")
