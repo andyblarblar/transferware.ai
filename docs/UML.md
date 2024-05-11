@@ -40,8 +40,10 @@ sequenceDiagram
     training-script->>+validator: :validate(model, cache, validation_dataset)
     validator->>-training-script: Validation percent
     alt If validation percent high enough 
-        training-script->>+query-api: Send model and caches to update endpoint
+        training-script->>+query-api: Send model and caches to update endpoint in tar archive
         query-api->>preprocessed-data: Replace with updated data
+        query-api->>-training-script: 
+        training-script->>+query-api: Call reload endpoint
         query-api->>model: :reload()
         query-api->>-training-script: 
     end
@@ -221,6 +223,9 @@ classDiagram
     ZhaoModel *-- EmbeddingsModelImplementation
     ZhaoModel *-- AnnoyIndex
     EmbeddingsModelImplementation <|-- ZhaoVGGModel
+    EmbeddingsModelImplementation <|-- SwinModel
+    EmbeddingsModelImplementation <|-- ConvnextModel
+    EmbeddingsModelImplementation <|-- ResNetModel
     Trainer <|--ZhaoTrainer
     ZhaoTrainer *-- EmbeddingsModelImplementation
 ```
