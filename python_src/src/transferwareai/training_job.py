@@ -67,16 +67,16 @@ class TrainingJob:
 
         return ImageFolder(str(res_path.absolute()))
 
-    def _deploy_model(self) -> bool:
-        res_path = Path(settings.training.resource_dir)
-        host = settings.query.host
-        port = settings.query.port
+    def _deploy_model(self, model: Model) -> bool:
+        res_paths = model.get_resources()
+        host = settings.training.api_host
+        port = settings.training.api_port
 
         # Tarball resources
-        tar_path = res_path.parent / "model.tar.gz"
+        tar_path = Path(settings.training.resource_dir) / "model.tar.gz"
         with tarfile.open(tar_path, "w:gz") as tar:
             logging.info("Creating tarball")
-            for f in res_path.glob("*"):
+            for f in res_paths:
                 logging.debug(f"Adding {f}")
                 tar.add(f)
             logging.info("Tarball created")
@@ -89,6 +89,7 @@ class TrainingJob:
                     f"http://{host}:{port}/update",
                     files={"file": f},
                     headers={"Authorization": settings.access_token},
+                    timeout=None
                 )
                 r.raise_for_status()
         except requests.exceptions.RequestException as e:
@@ -98,19 +99,6 @@ class TrainingJob:
             logging.error(f"Failed to read tarball: {e}")
             return False
         logging.info("Model uploaded")
-
-        # Reload model
-        logging.info("Reloading model")
-        try:
-            r = requests.post(
-                f"http://{host}:{port}/reload",
-                headers={"Authorization": settings.access_token},
-            )
-            r.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to reload model: {e}")
-            return False
-        logging.info("Model reloaded")
 
         # Cleanup
         tar_path.unlink()
