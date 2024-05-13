@@ -6,6 +6,7 @@ annoy
 matplotlib
 nest-asyncio
 aiorwlock
+pyzmq
 
 fastapi
 uvicorn

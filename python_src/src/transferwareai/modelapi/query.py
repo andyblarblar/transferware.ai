@@ -17,6 +17,7 @@ from transferwareai.modelapi.model import (
     reload_model,
     get_model,
     get_api,
+    reload_api_cache,
 )
 from transferwareai.models.adt import ImageMatch, Model
 from transferwareai.tccapi.api_cache import ApiCache
@@ -104,16 +105,18 @@ async def update_model(file: UploadFile, token=Header("Authorization")):
             with tarfile.open(fileobj=file.file) as t:
                 logging.debug("Extracting new model resources")
                 t.extractall(path=settings.query.resource_dir)
-                # TODO also update api cache here
+
+            # Update api cache while we are at it
+            await reload_api_cache()
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
 
 
 @app.post("/reload")
 async def reload_model_route(token=Header("Authorization")):
-    """Reload the model from disk."""
+    """Reload the model and caches from disk."""
     # Verify access token
-    if token != settings.access_token: # TODO move to callback from zmq
+    if token != settings.access_token:  # TODO move to callback from zmq
         raise HTTPException(status_code=401, detail="Invalid access token")
 
     lock_path = Path(settings.query.resource_dir) / ".$model.lock"
@@ -122,6 +125,8 @@ async def reload_model_route(token=Header("Authorization")):
     try:
         with FileLock(lock_path, timeout=0):
             logging.debug("Reloading model from disk")
-            await reload_model() # TODO also reload cache with update off
+            await reload_model()
+            # Also reload cache, as it should have been updated with the model
+            await reload_api_cache(update=False)
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
