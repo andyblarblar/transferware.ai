@@ -1,7 +1,6 @@
 .venv
 **/*.egg-info
 **/scratch
-**/settings.local.toml
 
 **/node_modules
 **/package-lock.json

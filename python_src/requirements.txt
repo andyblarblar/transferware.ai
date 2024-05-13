@@ -5,6 +5,7 @@ torchmetrics
 annoy
 matplotlib
 nest-asyncio
+aiorwlock
 
 fastapi
 uvicorn
