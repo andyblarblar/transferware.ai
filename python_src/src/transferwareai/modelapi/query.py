@@ -103,7 +103,7 @@ async def update_model(file: UploadFile, token=Header("Authorization")):
             # Extract the tarball
             with tarfile.open(fileobj=file.file) as t:
                 logging.debug("Extracting new model resources")
-                t. extractall(path=settings.query.resource_dir)
+                t.extractall(path=settings.query.resource_dir)
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
 
