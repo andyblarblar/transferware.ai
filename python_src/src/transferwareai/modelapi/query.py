@@ -17,6 +17,7 @@ from transferwareai.modelapi.model import (
     reload_model,
     get_model,
     get_api,
+    reload_api_cache,
 )
 from transferwareai.models.adt import ImageMatch, Model
 from transferwareai.tccapi.api_cache import ApiCache
@@ -104,7 +105,9 @@ async def update_model(file: UploadFile, token=Header("Authorization")):
             with tarfile.open(fileobj=file.file) as t:
                 logging.debug("Extracting new model resources")
                 t.extractall(path=settings.query.resource_dir)
-                # TODO also update api cache here
+
+            # Update api cache while we're here
+            await reload_api_cache(settings.update_cache)
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
 
