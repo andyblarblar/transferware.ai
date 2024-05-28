@@ -36,7 +36,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    initialize_model()
+    await initialize_model()
 
 
 @app.post("/query", response_model=list[ImageMatch])
@@ -113,7 +113,7 @@ async def update_model(file: UploadFile, token=Header("Authorization")):
 async def reload_model_route(token=Header("Authorization")):
     """Reload the model from disk."""
     # Verify access token
-    if token != settings.access_token: # TODO move to callback from zmq
+    if token != settings.access_token:  # TODO move to callback from zmq
         raise HTTPException(status_code=401, detail="Invalid access token")
 
     lock_path = Path(settings.query.resource_dir) / ".$model.lock"
@@ -122,6 +122,6 @@ async def reload_model_route(token=Header("Authorization")):
     try:
         with FileLock(lock_path, timeout=0):
             logging.debug("Reloading model from disk")
-            await reload_model() # TODO also reload cache with update off
+            await reload_model()  # TODO also reload cache with update off
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")

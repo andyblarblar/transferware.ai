@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional
 from aiorwlock import RWLock
+import filelock
 
 from ..config import settings
 from ..models.adt import Model, Validator, AbstractModelFactory
@@ -19,17 +20,22 @@ _api: Optional[ApiCache] = None
 _api_lock = RWLock()
 
 
-def initialize_model():
+async def initialize_model():
     """Initializes the model as given by the config."""
     global _model, _ds, _api
     factory = get_abstract_factory(settings.model_implimentation, "query")
     _model = factory.get_model()
 
     res_path = Path(settings.query.resource_dir)
-    _api = ApiCache.from_cache(
-        res_path.joinpath("cache"), no_update=not settings.update_cache
-    )
-    _ds = CacheDataset(_api, skip_ids=settings.training.skip_ids)
+
+    # First attempt to lock the assets directory
+    try:
+        with filelock.FileLock(res_path / "asset_lck.lck", timeout=0):
+            await reload_api_cache(settings.update_cache)
+    # If other apis are writing, then just wait until they're done and load
+    except filelock.Timeout:
+        with filelock.FileLock(res_path / "asset_lck.lck", timeout=-1):
+            await reload_api_cache(False)
 
 
 async def reload_model():
