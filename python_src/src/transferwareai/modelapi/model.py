@@ -55,7 +55,7 @@ async def reload_api_cache(update: bool = True):
             res_path = Path(settings.query.resource_dir)
             _api = ApiCache.from_cache(
                 res_path.joinpath("cache"),
-                no_update=(not settings.update_cache) and (not update),
+                no_update=(not settings.update_cache) or (not update),
             )
             _ds = CacheDataset(_api, skip_ids=settings.training.skip_ids)
 

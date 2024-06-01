@@ -22,4 +22,5 @@ if __name__ == "__main__":
         port=settings.query.port,
         workers=settings.query.workers,
         loop="asyncio",
+        root_path="/api"
     )

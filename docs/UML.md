@@ -42,10 +42,16 @@ sequenceDiagram
     alt If validation percent high enough 
         training-script->>+query-api: Send model and caches to update endpoint in tar archive
         query-api->>preprocessed-data: Replace with updated data
-        query-api->>-training-script: 
-        training-script->>+query-api: Call reload endpoint
-        query-api->>model: :reload()
-        query-api->>-training-script: 
+        
+        alt If cache not updated 
+        query-api->>tcc-api-cache: :reload_api_cache()
+        tcc-api-cache->>+tcc-api: Get all images and metadata
+        tcc-api->>-tcc-api-cache: 
+        tcc-api-cache->>query-api: 
+        end
+        
+        query-api->>mqtt-broker: Publish /transferware/reload
+        mqtt-broker->>query-api: Forward message, reloading local model and cache
     end
     
 ```

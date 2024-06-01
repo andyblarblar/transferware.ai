@@ -18,6 +18,7 @@ dynaconf
 polars
 requests
 
+aiomqtt
 aiohttp
 aiofile
 uvloop

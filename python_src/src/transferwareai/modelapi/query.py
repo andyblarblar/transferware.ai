@@ -1,8 +1,12 @@
+import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 import tarfile
+
+from aiomqtt import Client
 from filelock import Timeout, FileLock
 
 import torchvision
@@ -14,16 +18,32 @@ from pydantic import BaseModel
 from transferwareai.config import settings
 from transferwareai.modelapi.model import (
     initialize_model,
-    reload_model,
     get_model,
     get_api,
     reload_api_cache,
 )
+from transferwareai.modelapi.mqtt import mqtt_sub_process
 from transferwareai.models.adt import ImageMatch, Model
 from transferwareai.tccapi.api_cache import ApiCache
 from fastapi.responses import FileResponse
 
-app = FastAPI()
+# Required to avoid GC collecting tasks
+background_tasks = set()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Runs startup and shutdown code"""
+    # Load caches and models
+    initialize_model()
+    # Start listening for reload commands in the background
+    back_client = asyncio.create_task(mqtt_sub_process())
+    back_client.add_done_callback(background_tasks.discard)
+    background_tasks.add(back_client)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
 app.add_middleware(
@@ -33,11 +53,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup():
-    await initialize_model()
 
 
 @app.post("/query", response_model=list[ImageMatch])
@@ -106,25 +121,13 @@ async def update_model(file: UploadFile, token=Header("Authorization")):
                 logging.debug("Extracting new model resources")
                 t.extractall(path=settings.query.resource_dir)
 
-            # Update api cache while we're here
-            await reload_api_cache(settings.update_cache)
+            # Update the api cache since model may use it
+            await reload_api_cache(update=True)
     except Timeout:
         raise HTTPException(status_code=503, detail="Model update in progress")
 
-
-@app.post("/reload")
-async def reload_model_route(token=Header("Authorization")):
-    """Reload the model from disk."""
-    # Verify access token
-    if token != settings.access_token:  # TODO move to callback from zmq
-        raise HTTPException(status_code=401, detail="Invalid access token")
-
-    lock_path = Path(settings.query.resource_dir) / ".$model.lock"
-
-    # Acquire lock
-    try:
-        with FileLock(lock_path, timeout=0):
-            logging.debug("Reloading model from disk")
-            await reload_model()  # TODO also reload cache with update off
-    except Timeout:
-        raise HTTPException(status_code=503, detail="Model update in progress")
+    # Pub message telling nodes to reload their resources (including this one)
+    # spawn a new client each time because we will rarely update anyhow
+    async with Client("broker") as client:
+        logging.debug("Pub reload")
+        await client.publish("transferwareai/reload", qos=2)
