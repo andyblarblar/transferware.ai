@@ -35,7 +35,7 @@ background_tasks = set()
 async def lifespan(app: FastAPI):
     """Runs startup and shutdown code"""
     # Load caches and models
-    initialize_model()
+    await initialize_model()
     # Start listening for reload commands in the background
     back_client = asyncio.create_task(mqtt_sub_process())
     back_client.add_done_callback(background_tasks.discard)
