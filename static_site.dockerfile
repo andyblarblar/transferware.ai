@@ -1,5 +1,9 @@
 FROM node as build
 
+# Allow for compose files to configure the final domain
+ARG QUERY_URL=http://0.0.0.0:80/api
+ENV REACT_APP_QUERY_BASE=$QUERY_URL
+
 # Copy webapp
 COPY static_site static_site
 WORKDIR static_site/transferware-app
