@@ -68,9 +68,7 @@ class TrainingJob:
         return ImageFolder(str(res_path.absolute()))
 
     def _deploy_model(self, model: Model) -> bool:
-        res_paths = model.get_resources()
-        host = settings.training.api_host
-        port = settings.training.api_port
+        res_paths = model.get_resource_files()
 
         # Tarball resources
         tar_path = Path(settings.training.resource_dir) / "model.tar.gz"
@@ -86,7 +84,7 @@ class TrainingJob:
         try:
             with tarfile.open(tar_path, "r") as f:
                 r = requests.post(
-                    f"http://{host}:{port}/update",
+                    f"{settings.training.api_url}/update",
                     files={"file": f},
                     headers={"Authorization": settings.access_token},
                     timeout=None
