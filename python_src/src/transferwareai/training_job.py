@@ -40,11 +40,14 @@ class TrainingJob:
         logging.info("Starting validation")
         valid_ds = self._get_valid_ds()
 
-        validator = factory.get_validator()
-        class_val, val_percent = validator.validate(trained_model, valid_ds)
+        if not settings.training.update_index_only:
+            validator = factory.get_validator()
+            class_val, val_percent = validator.validate(trained_model, valid_ds)
 
-        logging.info(f"Class val: {class_val}")
-        logging.info(f"Total val: {val_percent}")
+            logging.info(f"Class val: {class_val}")
+            logging.info(f"Total val: {val_percent}")
+        else:
+            val_percent = 1.0
 
         # Deploy model if over threshold
         if val_percent > settings.training.validation_threshold:
@@ -82,11 +85,11 @@ class TrainingJob:
         # Upload to query API
         logging.info("Uploading model to query API")
         try:
-            with tarfile.open(tar_path, "r") as f:
+            with open(tar_path, "rb") as f:
                 r = requests.post(
                     f"{settings.training.api_url}/update",
                     files={"file": f},
-                    headers={"Authorization": settings.access_token},
+                    headers={"token": settings.access_token},
                     timeout=None
                 )
                 r.raise_for_status()

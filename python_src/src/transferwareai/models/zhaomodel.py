@@ -594,121 +594,131 @@ class ZhaoTrainer(Trainer):
         best_val_loss = 1e20
         num_not_improved = 0
 
-        # Training process begins
-        for epoch in range(epochs):
-            logging.debug(f"Starting epoch {epoch}")
-            loss_sum = 0
+        if not settings.training.update_index_only:
+            # Training process begins
+            for epoch in range(epochs):
+                logging.debug(f"Starting epoch {epoch}")
+                loss_sum = 0
 
-            model_wrapper.training_mode()
+                model_wrapper.training_mode()
 
-            map_metric_eval = BinaryAveragePrecision(thresholds=10).to(device)
-            acc_eval = BinaryAccuracy(threshold=0.8).to(device)
+                map_metric_eval = BinaryAveragePrecision(thresholds=10).to(device)
+                acc_eval = BinaryAccuracy(threshold=0.8).to(device)
 
-            cutmix = transforms.CutMix(num_classes=dataset.class_num())
-            mixup = transforms.MixUp(num_classes=dataset.class_num())
-            cutmix_or_mixup = transforms.RandomChoice([cutmix, mixup]).to(device)
+                cutmix = transforms.CutMix(num_classes=dataset.class_num())
+                mixup = transforms.MixUp(num_classes=dataset.class_num())
+                cutmix_or_mixup = transforms.RandomChoice([cutmix, mixup]).to(device)
 
-            for step, (x, y) in tqdm(
-                enumerate(train_dataloader), total=len(train_dataloader)
-            ):
-                # Migrating data to gpu
-                x, y = x.to(device), y.to(device)
+                for step, (x, y) in tqdm(
+                    enumerate(train_dataloader), total=len(train_dataloader)
+                ):
+                    # Migrating data to gpu
+                    x, y = x.to(device), y.to(device)
 
-                # Slice and dice images together (making them multiclass)
-                x, y = cutmix_or_mixup(x, y)
+                    # Slice and dice images together (making them multiclass)
+                    x, y = cutmix_or_mixup(x, y)
 
-                # Turn on model training mode
-                model.train()
-                # Generating predictions
-                logits = model(x)
-                # Calculating losses
-                loss = criteon.forward(logits, y)
-                # Recording total losses
-                loss_sum = loss_sum + loss.detach()
-                # Optimizer gradient zeroed
-                optimizer.zero_grad()
-                # Back propagation of loss to obtain loss gradient
-                loss.backward()
-                # Optimizing model
-                optimizer.step()
-                # Recording global step count
-                global_step += 1
+                    # Turn on model training mode
+                    model.train()
+                    # Generating predictions
+                    logits = model(x)
+                    # Calculating losses
+                    loss = criteon.forward(logits, y)
+                    # Recording total losses
+                    loss_sum = loss_sum + loss.detach()
+                    # Optimizer gradient zeroed
+                    optimizer.zero_grad()
+                    # Back propagation of loss to obtain loss gradient
+                    loss.backward()
+                    # Optimizing model
+                    optimizer.step()
+                    # Recording global step count
+                    global_step += 1
 
-                writer.add_scalar("train/loss", loss, global_step)
+                    writer.add_scalar("train/loss", loss, global_step)
 
-            loss_sum = loss_sum / len(train_dataloader)
+                loss_sum = loss_sum / len(train_dataloader)
 
-            # Opening the model evaluation mode
-            model.eval()
-            model_wrapper.eval_mode()
+                # Opening the model evaluation mode
+                model.eval()
+                model_wrapper.eval_mode()
 
-            logging.debug("Train complete, starting test")
+                logging.debug("Train complete, starting test")
 
-            loss_sum_eval = 0
-            # Evaluating in test sets
-            for step, (x, y) in tqdm(
-                enumerate(test_dataloader), total=len(test_dataloader)
-            ):
-                x, y = x.to(device), y.to(device)
+                loss_sum_eval = 0
+                # Evaluating in test sets
+                for step, (x, y) in tqdm(
+                    enumerate(test_dataloader), total=len(test_dataloader)
+                ):
+                    x, y = x.to(device), y.to(device)
 
-                # Calculating model prediction results
-                logits = model(x)
-                # Calculating losses
-                loss = criteon.forward(logits, y)
-                loss_sum_eval = loss_sum_eval + loss.detach()
+                    # Calculating model prediction results
+                    logits = model(x)
+                    # Calculating losses
+                    loss = criteon.forward(logits, y)
+                    loss_sum_eval = loss_sum_eval + loss.detach()
 
-                writer.add_scalar("val/loss", loss, (epoch + 1) * step)
+                    writer.add_scalar("val/loss", loss, (epoch + 1) * step)
 
-                with torch.no_grad():
-                    # Create PR curve
-                    probs = torch.softmax(logits, dim=1)
-                    one_hot_labels = torch.nn.functional.one_hot(
-                        y, num_classes=dataset.class_num()
+                    with torch.no_grad():
+                        # Create PR curve
+                        probs = torch.softmax(logits, dim=1)
+                        one_hot_labels = torch.nn.functional.one_hot(
+                            y, num_classes=dataset.class_num()
+                        )
+                        writer.add_pr_curve(
+                            "val/pr", one_hot_labels, probs, (epoch + 1) * step
+                        )
+                        writer.add_scalar(
+                            "val/map",
+                            map_metric_eval(probs, one_hot_labels),
+                            (epoch + 1) * step,
+                        )
+
+                        acc_eval.update(probs, one_hot_labels)
+
+                eval_acc = acc_eval.compute()
+                writer.add_scalar("val/avg_accuracy", eval_acc, epoch)
+
+                loss_sum_eval = loss_sum_eval / len(test_dataloader)
+
+                writer.add_scalars(
+                    "Train vs Test",
+                    {"val": loss_sum_eval, "train": loss_sum},
+                    global_step,
+                )
+
+                # Save model if improved
+                if loss_sum_eval < best_val_loss:
+                    logging.debug("Saving best model")
+                    torch.save(
+                        model.to("cpu").state_dict(),
+                        self._outer_dataset.joinpath("zhao_train_best.pth"),
                     )
-                    writer.add_pr_curve(
-                        "val/pr", one_hot_labels, probs, (epoch + 1) * step
-                    )
-                    writer.add_scalar(
-                        "val/map",
-                        map_metric_eval(probs, one_hot_labels),
-                        (epoch + 1) * step,
-                    )
+                    best_val_loss = loss_sum_eval
+                    num_not_improved = 0
+                else:
+                    num_not_improved += 1
 
-                    acc_eval.update(probs, one_hot_labels)
+                    # Stop training if val keeps not improving
+                    if num_not_improved > settings.training.early_stopping_thresh:
+                        break
 
-            eval_acc = acc_eval.compute()
-            writer.add_scalar("val/avg_accuracy", eval_acc, epoch)
-
-            loss_sum_eval = loss_sum_eval / len(test_dataloader)
-
-            writer.add_scalars(
-                "Train vs Test", {"val": loss_sum_eval, "train": loss_sum}, global_step
+            # Rename best weights so they load automatically
+            self._outer_dataset.joinpath("zhao_train_best.pth").rename(
+                self._outer_dataset.joinpath("zhao_train.pth")
             )
 
-            # Save model if improved
-            if loss_sum_eval < best_val_loss:
-                logging.debug("Saving best model")
-                torch.save(
-                    model.to("cpu").state_dict(),
-                    self._outer_dataset.joinpath("zhao_train_best.pth"),
-                )
-                best_val_loss = loss_sum_eval
-                num_not_improved = 0
-            else:
-                num_not_improved += 1
-
-                # Stop training if val keeps not improving
-                if num_not_improved > settings.training.early_stopping_thresh:
-                    break
-
-        # Rename best weights so they load automatically
-        self._outer_dataset.joinpath("zhao_train_best.pth").rename(
-            self._outer_dataset.joinpath("zhao_train.pth")
+        # There can be more classes in the dataset if only using index, so just load
+        class_num = (
+            torch.load(self._outer_dataset.joinpath("zhao_class_count.pkl").absolute())
+            if settings.training.update_index_only
+            else dataset.class_num()
         )
 
         # Reload best weights
         model_wrapper = self._implementation_class(
-            dataset.class_num(),
+            class_num,
             self._outer_dataset.joinpath("zhao_train.pth"),
             pretrained=False,
             device=device,
@@ -718,7 +728,7 @@ class ZhaoTrainer(Trainer):
         index, idx_mappings = self.generate_annoy_cache(model_wrapper, dataset)
 
         logging.debug("Saving resources to disk")
-        self.save_resources(dataset, idx_mappings, index)
+        self.save_resources(class_num, idx_mappings, index)
 
         return ZhaoModel(
             resource_dir=self._outer_dataset,
@@ -727,7 +737,7 @@ class ZhaoTrainer(Trainer):
         )
 
     def save_resources(
-        self, dataset: CacheDataset, idx_mappings: list[int], index: annoy.AnnoyIndex
+        self, class_cnt: int, idx_mappings: list[int], index: annoy.AnnoyIndex
     ):
         """Saves training resources to disk"""
         # Save to disk
@@ -740,7 +750,7 @@ class ZhaoTrainer(Trainer):
         index.save(str(idx_path))
         torch.save(idx_mappings, mappings_path)
         # We need class count later when loading the model on the api
-        torch.save(dataset.class_num(), cnt_path)
+        torch.save(class_cnt, cnt_path)
 
     def generate_annoy_cache(
         self,
