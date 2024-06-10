@@ -3,6 +3,7 @@ import {useLocation, useNavigate} from 'react-router-dom';
 import photoIcon from "../assets/images/photo-icon.png";
 import cross from "../assets/images/Cross.png";
 import { useData } from "../DataContext";
+import heic2any from "heic2any"; 
 
 function UploadPage() {
   const location = useLocation();
@@ -19,23 +20,46 @@ function UploadPage() {
   // Base url for the query api
   const base_url = process.env.REACT_APP_QUERY_BASE;
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file && (file.type === "image/png" || file.type === "image/jpeg")) {
-      setSelectedFile(file);
+    if (
+      file &&
+      (file.type === "image/png" ||
+        file.type === "image/jpeg" ||
+        file.type === "image/heic")
+    ) {
+      let processedFile = file;
+      // Convert HEIC to JPEG if needed
+      if (file.type === "image/heic") {
+        try {
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+          });
+          processedFile = new File(
+            [convertedBlob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+        } catch (error) {
+          setErrorMessage("Failed to convert HEIC to JPEG.");
+          return;
+        }
+      }
+      setSelectedFile(processedFile);
       setErrorMessage("");
-      setUploadedFileName(file.name);
-      setImagePreviewUrl(URL.createObjectURL(file)); // Create and set the image URL for preview
+      setUploadedFileName(processedFile.name);
+      setImagePreviewUrl(URL.createObjectURL(processedFile)); // Create and set the image URL for preview
 
       // Calculate file size in kilobytes
-      const fileSizeInKB = Math.round((file.size / 1024) * 100) / 100;
+      const fileSizeInKB = Math.round((processedFile.size / 1024) * 100) / 100;
       setFileSize(fileSizeInKB + " KB");
     } else {
       setSelectedFile(null);
       setUploadedFileName(""); // Clear uploaded file name
       setFileSize(""); // Clear file size
       setImagePreviewUrl(null); // Clear the image preview URL
-      setErrorMessage("Please select a valid PNG or JPG file.");
+      setErrorMessage("Please select a valid PNG, JPG, or HEIC file.");
     }
   };
 
@@ -171,7 +195,7 @@ function UploadPage() {
               ref={fileInputRef}
               id="fileInput"
               type="file"
-              accept=".png,.jpg,.jpeg"
+              accept=".png,.jpg,.jpeg,.heic"
               onChange={handleFileChange}
               className="hidden"
             />
