@@ -21,7 +21,7 @@ function UploadPage() {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file && (file.type === "image/png" || file.type === "image/jpeg")) {
+    if (file && (file.type === "image/png" || file.type === "image/jpeg" || file.type === "image/heic")) {
       setSelectedFile(file);
       setErrorMessage("");
       setUploadedFileName(file.name);
