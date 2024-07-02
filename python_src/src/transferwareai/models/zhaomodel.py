@@ -439,6 +439,100 @@ class ConvnextModel(EmbeddingsModelImplementation):
             return embedding.cpu()
 
 
+class ConvnextBigModel(EmbeddingsModelImplementation):
+    """Custom ConvNeXt model for embedding extraction."""
+
+    def embedding_size(self) -> int:
+        return 1024
+
+    def __init__(
+        self,
+        class_count: int,
+        weights: Optional[Path] = None,
+        pretrained: bool = False,
+        device="cpu",
+    ):
+        """
+        Wraps the torch model.
+        :param class_count: Number of classes
+        :param weights: Path to weights file to load
+        :param pretrained: if weights are trained for transferware, or are general pretrained weights
+        :param device: Device to load on
+        """
+        super().__init__()
+
+        self.device = device
+        # Use torch weights if we are using a pretrained weights and passed none
+        model_cnext = torchvision.models.convnext_base(
+            weights=(
+                torchvision.models.ConvNeXt_Base_Weights.IMAGENET1K_V1
+                if pretrained and weights is None
+                else None
+            )
+        )
+
+        # Loading our trained model, so need to change shape
+        if not pretrained:
+            model_cnext.classifier[2] = torch.nn.Linear(1024, class_count)
+
+        # Load trained model if provided
+        if weights:
+            model_pth = torch.load(weights)
+            model_cnext.load_state_dict(model_pth)
+
+        # Add our class size
+        if pretrained:
+            model_cnext.classifier[2] = torch.nn.Linear(1024, class_count)
+
+        self.model = model_cnext.to(device)
+
+        # Returns the result of the last layer before the classifier
+        self._extractor = create_feature_extractor(
+            self.model, {"classifier.1": "flattened_feat"}
+        ).to(device)
+
+        # Preprocessing steps
+        self._transform = transforms.Compose(
+            [
+                transforms.Grayscale(3),
+                transforms.Resize((224, 224)),
+                torchvision.models.ConvNeXt_Base_Weights.IMAGENET1K_V1.transforms().to(
+                    device
+                ),
+            ]
+        ).to(device)
+
+    def transform(self, img: Tensor | Image) -> Tensor:
+        """Preprocesses input, applying augmentations if in training mode."""
+        # First convert to tensor
+        match img:
+            case Image():
+                temp = transforms.ToTensor()(img)
+            case Tensor():
+                temp = img
+            case _:
+                raise ValueError("Can only query tensor or image!")
+
+        temp = temp.to(self.device)
+        # Next add augmentations
+        if self._augmentations and self._training:
+            temp = self._augmentations(temp)
+
+        # Finally norm
+        return self._transform(temp)
+
+    def get_embedding(self, image: Tensor) -> Tensor:
+        """Gets the embedding vector for the given image in (C, W, H). The image is assumed to be preprocessed."""
+        image = image.to(self.device).unsqueeze(0)  # Make into batch shape
+        with torch.no_grad():
+            model = self._extractor
+            model.eval()
+
+            embedding = model.forward(image)["flattened_feat"][0]
+
+            return embedding.cpu()
+
+
 T = TypeVar("T", bound=EmbeddingsModelImplementation)
 
 
@@ -571,17 +665,13 @@ class ZhaoTrainer(Trainer):
             test_set,
             batch_size=settings.training.batch_size,
             shuffle=False,
-            num_workers=10,
-            pin_memory=device != "cpu",
-            pin_memory_device=device,
+            num_workers=1,
         )
         train_dataloader = DataLoader(
             train_set,
             batch_size=settings.training.batch_size,
             shuffle=True,
-            num_workers=10,
-            pin_memory=device != "cpu",
-            pin_memory_device=device,
+            num_workers=1,
         )
 
         logging.debug("Data prepared, starting training")
@@ -697,6 +787,9 @@ class ZhaoTrainer(Trainer):
                     )
                     best_val_loss = loss_sum_eval
                     num_not_improved = 0
+
+                    # Move back to GPU (to is inplace)
+                    model.to(device)
                 else:
                     num_not_improved += 1
 
