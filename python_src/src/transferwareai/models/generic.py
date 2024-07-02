@@ -24,6 +24,8 @@ class GenericValidator(Validator):
         class_val = defaultdict(list)
 
         dl = DataLoader(validation_set, shuffle=False, batch_size=1, num_workers=5)
+        # Validation folder is pattern ID as class, so create mapping where we can get the
+        # Pattern ID of the image in the validation loop
         idx_to_class = {j: i for (i, j) in validation_set.class_to_idx.items()}
 
         for img, id in tqdm(dl):
