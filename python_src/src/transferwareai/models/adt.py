@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
+from PIL.Image import Image
 from pydantic import BaseModel
 from torch import Tensor
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ class Model(ABC):
     """Interface for query models."""
 
     @abstractmethod
-    def query(self, image: Tensor, top_k: int = 10) -> list[ImageMatch]:
+    def query(self, image: Tensor | Image, top_k: int = 10) -> list[ImageMatch]:
         """Takes the input image, and finds the k closest images from the dataset used for training."""
         ...
 
