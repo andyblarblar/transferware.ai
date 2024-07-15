@@ -4,10 +4,11 @@ import group3 from "../assets/images/Group-3.png";
 import uploadIcon from "../assets/images/upload-icon.png";
 import viewIcon from "../assets/images/view-icon.png";
 import databaseIcon from "../assets/images/database-icon.png";
+import Footer from "../components/footer";
 
 function Landing() {
   return (
-    <div className="h-screen overflow-y-hidden relative">
+    <div className="h-screen relative">
       <div className="flex flex-col lg:flex-row">
         <div className="mt-20 header-column flex flex-col justify-center pb-0 pt-10 px-0 lg:py-16 sm:px-20">
           <div className="header lg:w-full px-10 sm:px-0">
@@ -16,7 +17,8 @@ function Landing() {
             </h1>
             <p className="my-8 lg:w-4/5">
               Welcome to transferware.ai! Our tool was designed to be used by
-              anyone, not just archaeologists. Simply upload an image of your sherd or plate and our model will provide the top matches for you. 
+              anyone, not just archaeologists. Simply upload an image of your
+              sherd or plate and our model will provide the top matches for you.
             </p>
             <Link to="/uploadPage">
               <button className="bg-black font-semibold text-white p-4 px-14 rounded-lg rounded-bl-none">
@@ -51,6 +53,7 @@ function Landing() {
           <img src={group3} className="w-full" />
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
