@@ -25,7 +25,7 @@ const Section = ({ title, text, imgSrc, reverse }) => (
 
 const BestPractice = ({ icon, title, text }) => (
   <div className="flex flex-col items-center md:w-1/5 w-1/4">
-    <img src={icon} className="w-1/6" />
+    <img src={icon} className="sm:w-1/6 w-1/4" />
     <h1 className="font-bold text-1xl">{title}</h1>
     <p className="font-light text-center">{text}</p>
   </div>
