@@ -8,6 +8,10 @@ module.exports = {
       fontFamily: {
         merriweather: ["Merriweather", "serif"],
       },
+      backgroundImage: {
+        "custom-image":
+          "url('assets/images/header-bg.jpg')",
+      },
     },
   },
   variants: {

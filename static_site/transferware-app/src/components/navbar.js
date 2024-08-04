@@ -12,7 +12,7 @@ const Navbar = () => {
           <Link to="/">Home</Link>
         </li>
         <li className="hover:text-blue-500">
-          <Link to="/">About</Link>
+          <Link to="/about">About</Link>
         </li>
         <li className="hover:text-blue-500">
           <Link to="/uploadPage">Upload</Link>

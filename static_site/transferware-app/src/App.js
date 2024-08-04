@@ -8,6 +8,7 @@ import Landing from "./pages/landing.js";
 import UploadPage from "./pages/uploadPage.js";
 import ViewMatches from "./pages/viewMatches";
 import LoadingAnimation from "./pages/loadingPage";
+import AboutPage from "./pages/about";
 
 function App() {
   return (
@@ -16,8 +17,10 @@ function App() {
         <Routes>
           <Route path="/" element={<><NavbarAlternate /><Landing /></>} />
           <Route path="/uploadPage" element={<><NavbarAlternate /><UploadPage /></>} />
+          <Route path="/about" element={<><Navbar/><AboutPage /></>} />
           <Route path="/viewMatches" element={<><Navbar /><ViewMatches /></>} />
           <Route path="/loading" element={<><Navbar/><LoadingAnimation /></>} />
+
         </Routes>
       </DataProvider>
     </Router>
