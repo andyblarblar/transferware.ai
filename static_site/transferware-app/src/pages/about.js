@@ -15,7 +15,7 @@ const Section = ({ title, text, imgSrc, reverse }) => (
       reverse ? "flex-row-reverse" : ""
     } md:space-x-14`}
   >
-    <img src={imgSrc} className="lg:w-1/6 md:w-1/4 w-1/2" />
+    <img src={imgSrc} className="lg:w-1/6 md:w-1/4 w-1/2 sm:px-4 px-5" />
     <div className="flex flex-col w-1/3">
       <h1 className="font-bold text-1xl">{title}</h1>
       <p className="font-light">{text}</p>
@@ -38,7 +38,7 @@ function AboutPage() {
     <div className="flex flex-col items-center pt-[52px]">
       <div className="bg-custom-image bg-cover bg-center h-64 w-screen shadow-md relative">
         <div className="absolute inset-0 flex items-center justify-center">
-          {/* <h1 className="text-black text-5xl font-bold">About us</h1> */}
+          {/* <button className="text-white text-4xl font-bold bg-black rounded-lg px-6">About us</button> */}
         </div>
       </div>
       <div>
@@ -77,7 +77,7 @@ function AboutPage() {
             <BestPractice
               icon={lightIcon}
               title="Lighting"
-              text="Ensure the image is well-lit and free from shadows. Natural light is ideal."
+              text="Ensure the image is well-lit and free from shadows and glares. Natural light is ideal. "
             />
             <BestPractice
               icon={focusIcon}
