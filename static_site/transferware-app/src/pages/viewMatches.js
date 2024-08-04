@@ -9,9 +9,9 @@ function ViewMatches() {
 
   return (
     <div>
-      <div className="flex flex-col xl:flex-row sm:h-screen">
+      <div className="flex flex-col xl:flex-row">
         {imagePreviewUrl ? (
-          <div className="flex items-center justify-center p-12 bg-zinc-900">
+          <div className="flex items-start justify-center p-12 bg-zinc-900">
             <div className="flex flex-col items-center">
               <div className=" mb-4 p-6">
                 <h1 className="font-semibold text-white text-2xl font-serif ">
